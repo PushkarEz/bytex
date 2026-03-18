@@ -1,5 +1,8 @@
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except:
+    pass
 
 
 from flask import Flask, render_template, request, jsonify

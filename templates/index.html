@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByteX — India's AI Cyber Doctor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f5f7fa; color: #1a1a2e; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+        .navbar { padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e8ecf0; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 10px #0000000a; min-height: 56px; flex-wrap: wrap; gap: 0; }
+        .nav-left { display: flex; align-items: center; gap: 0; }
+        .nav-tabs { display: flex; gap: 0; margin-left: 24px; }
+        .nav-tab-btn { padding: 18px 16px; border: none; background: transparent; color: #94a3b8; font-size: 13px; font-weight: 700; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
+        .nav-tab-btn:hover { color: #1a1a2e; }
+        .nav-tab-btn.active { color: #00c96b; border-bottom: 3px solid #00c96b; }
+        @media (max-width: 500px) { .navbar { padding: 0 12px; } .nav-tab-btn { padding: 16px 10px; font-size: 12px; } }
+        .logo { font-size: 22px; font-weight: 900; color: #00c96b; }
+        .logo span { color: #1a1a2e; }
+        .nav-badge { background: #f0fdf7; color: #00c96b; border: 1px solid #00c96b30; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+        .hero { text-align: center; padding: 40px 16px 30px; opacity: 0; animation: fadeUp 0.8s ease 0.2s forwards; }
+        .hero-badge { display: inline-block; background: #fff3e0; color: #e65100; border: 1px solid #ffcc8030; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; margin-bottom: 14px; letter-spacing: 1px; }
+        .hero h1 { font-size: clamp(28px, 6vw, 48px); font-weight: 900; color: #1a1a2e; margin-bottom: 10px; min-height: 50px; line-height: 1.2; }
+        .hero h1 .green { background: linear-gradient(135deg, #00c96b, #00a855); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .cursor { display: inline-block; width: 3px; height: 40px; background: #00c96b; vertical-align: middle; margin-left: 3px; animation: blink 0.8s step-end infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        .hero p { color: #64748b; font-size: clamp(13px, 3vw, 16px); max-width: 480px; margin: 0 auto 24px; }
+
+        .search-wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; opacity: 0; animation: fadeUp 0.8s ease 0.4s forwards; }
+        .search-box { display: flex; align-items: center; background: #fff; border: 2px solid #e8ecf0; border-radius: 14px; padding: 5px 5px 5px 14px; gap: 8px; transition: all 0.2s; box-shadow: 0 4px 20px #0000000a; }
+        .search-box:focus-within { border-color: #00c96b; box-shadow: 0 4px 25px #00c96b15; }
+        .detect-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; background: #f1f5f9; color: #94a3b8; white-space: nowrap; transition: all 0.3s; min-width: 70px; text-align: center; flex-shrink: 0; }
+        .detect-badge.url { background: #dbeafe; color: #1d4ed8; }
+        .detect-badge.email { background: #f0fdf7; color: #16a34a; }
+        .detect-badge.password { background: #fef3c7; color: #d97706; }
+        .detect-badge.whatsapp { background: #f0fdf7; color: #15803d; }
+        .detect-badge.ip { background: #f3e8ff; color: #7c3aed; }
+        #mainInput { flex: 1; border: none; background: transparent; font-size: clamp(13px, 3vw, 15px); color: #1a1a2e; outline: none; padding: 10px 0; min-width: 0; }
+        #mainInput::placeholder { color: #cbd5e1; }
+        .scan-btn { padding: 10px 18px; border-radius: 10px; border: none; background: linear-gradient(135deg, #00c96b, #00a855); color: #fff; font-weight: 800; font-size: clamp(12px, 2.5vw, 14px); cursor: pointer; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
+        .scan-btn:hover { transform: translateY(-1px); }
+        .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .detect-tags { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .detect-tag { font-size: 10px; color: #94a3b8; background: #fff; border: 1px solid #e8ecf0; padding: 2px 8px; border-radius: 20px; }
+
+        /* PASSWORD STRENGTH METER */
+        .strength-wrap { display: none; background: #fff; border: 1px solid #e8ecf0; border-radius: 12px; padding: 12px 16px; margin-top: 8px; animation: fadeUp 0.3s ease; }
+        .strength-wrap.show { display: block; }
+        .strength-bars { display: flex; gap: 4px; margin-bottom: 6px; }
+        .strength-bar { flex: 1; height: 4px; border-radius: 4px; background: #f1f5f9; transition: background 0.3s; }
+        .strength-row { display: flex; justify-content: space-between; align-items: center; }
+        .strength-label { font-size: 12px; font-weight: 700; }
+        .strength-tip { font-size: 11px; color: #94a3b8; }
+
+        /* UPLOAD ZONE */
+        .upload-divider { display: flex; align-items: center; gap: 10px; max-width: 640px; margin: 12px auto 0; padding: 0 16px; }
+        .upload-divider-line { flex: 1; height: 1px; background: #e8ecf0; }
+        .upload-divider-text { font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
+        .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 640px; margin: 10px auto 0; padding: 0 16px; opacity: 0; animation: fadeUp 0.8s ease 0.5s forwards; }
+        @media (max-width: 400px) { .upload-grid { grid-template-columns: 1fr; } }
+        .upload-card { background: #fff; border: 2px dashed #e8ecf0; border-radius: 14px; padding: 18px 14px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+        .upload-card:hover { border-color: #00c96b; background: #f0fdf7; transform: translateY(-2px); }
+        .upload-card.dragover { border-color: #00c96b; background: #f0fdf7; }
+        .upload-card input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+        .upload-icon { font-size: 28px; margin-bottom: 8px; }
+        .upload-title { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 3px; }
+        .upload-sub { font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
+        .upload-badge { font-size: 10px; font-weight: 700; color: #00c96b; background: #f0fdf7; border: 1px solid #00c96b30; padding: 2px 8px; border-radius: 20px; display: inline-block; }
+
+        /* SCORE */
+        .score-bar { max-width: 640px; margin: 12px auto 0; padding: 0 16px; opacity: 0; animation: fadeUp 0.8s ease 0.6s forwards; }
+        .score-inner { background: #fff; border: 1px solid #e8ecf0; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 14px; box-shadow: 0 2px 10px #0000000a; }
+        .score-num { font-size: 28px; font-weight: 900; color: #00c96b; line-height: 1; flex-shrink: 0; }
+        .score-grade { font-size: 14px; font-weight: 900; color: #00c96b; }
+        .score-lbl { font-size: 10px; color: #94a3b8; }
+        .score-track-wrap { flex: 1; min-width: 0; }
+        .score-track { height: 5px; background: #f1f5f9; border-radius: 5px; overflow: hidden; }
+        .score-fill { height: 100%; width: 100%; background: #00c96b; border-radius: 5px; transition: all 0.8s ease; }
+        .score-desc { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+
+        .main-wrap { max-width: 720px; margin: 24px auto; padding: 0 16px 80px; }
+        .loading-wrap { display: none; align-items: center; gap: 10px; padding: 16px 0; color: #94a3b8; font-size: 14px; }
+        .loading-wrap.show { display: flex; }
+        .spinner { width: 18px; height: 18px; border: 2px solid #e8ecf0; border-top-color: #00c96b; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .progress-wrap { display: none; padding: 14px 0; }
+        .progress-wrap.show { display: block; }
+        .progress-top { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 6px; }
+        .progress-track { height: 5px; background: #f1f5f9; border-radius: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #00c96b, #00a855); border-radius: 5px; width: 0%; transition: width 0.8s ease; }
+        .result-area { display: none; }
+        .result-area.show { display: block; animation: fadeUp 0.4s ease; }
+        .verdict-card { border-radius: 14px; padding: 18px 20px; display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+        .verdict-card.green { background: linear-gradient(135deg, #f0fdf7, #dcfce7); border: 1px solid #86efac; }
+        .verdict-card.red { background: linear-gradient(135deg, #fff5f5, #fee2e2); border: 1px solid #fca5a5; }
+        .verdict-card.orange { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fcd34d; }
+        .verdict-card.blue { background: linear-gradient(135deg, #f0f9ff, #dbeafe); border: 1px solid #93c5fd; }
+        .verdict-emoji { font-size: 32px; flex-shrink: 0; }
+        .verdict-title { font-size: clamp(16px, 4vw, 20px); font-weight: 900; margin-bottom: 4px; }
+        .verdict-card.green .verdict-title { color: #16a34a; }
+        .verdict-card.red .verdict-title { color: #dc2626; }
+        .verdict-card.orange .verdict-title { color: #d97706; }
+        .verdict-card.blue .verdict-title { color: #2563eb; }
+        .verdict-sub { font-size: 13px; color: #64748b; line-height: 1.6; }
+        .info-box { background: #fff; border: 1px solid #e8ecf0; border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; }
+        .info-box h3 { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; }
+        .info-box p { font-size: 13px; color: #475569; line-height: 1.8; }
+        .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 10px; }
+        .stat-box { background: #fff; border: 1px solid #e8ecf0; border-radius: 10px; padding: 12px 8px; text-align: center; }
+        .stat-box .n { font-size: clamp(20px, 5vw, 26px); font-weight: 900; margin-bottom: 2px; }
+        .stat-box .l { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-box.danger .n { color: #ef4444; }
+        .stat-box.warn .n { color: #f59e0b; }
+        .stat-box.safe .n { color: #22c55e; }
+
+        /* IP INFO GRID */
+        .ip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .ip-item { background: #fff; border: 1px solid #e8ecf0; border-radius: 10px; padding: 10px 12px; }
+        .ip-item .ip-lbl { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+        .ip-item .ip-val { font-size: 13px; font-weight: 700; color: #1a1a2e; }
+
+        .engine-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 6px; border-bottom: 1px solid #f8fafc; cursor: pointer; border-radius: 6px; transition: all 0.15s; gap: 8px; }
+        .engine-row:hover { background: #f0fdf7; }
+        .engine-row:last-child { border-bottom: none; }
+        .engine-name { font-size: 12px; color: #475569; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .engine-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; flex-shrink: 0; }
+        .engine-badge.malicious { background: #fee2e2; color: #dc2626; }
+        .engine-badge.suspicious { background: #fef3c7; color: #d97706; }
+        .engine-badge.harmless { background: #dcfce7; color: #16a34a; }
+        .engine-badge.undetected { background: #f1f5f9; color: #94a3b8; }
+        .engines-scroll { max-height: 240px; overflow-y: auto; }
+        .click-hint { font-size: 10px; color: #94a3b8; margin-bottom: 8px; }
+        .timeline-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; animation: fadeUp 0.3s ease; }
+        .timeline-item:last-child { border-bottom: none; }
+        .timeline-year { font-size: 12px; font-weight: 700; color: #94a3b8; min-width: 32px; padding-top: 2px; }
+        .timeline-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+        .timeline-dot.high { background: #ef4444; }
+        .timeline-dot.medium { background: #f59e0b; }
+        .timeline-name { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
+        .timeline-desc { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+        .timeline-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+        .timeline-tag { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; background: #fee2e2; color: #dc2626; }
+        .coach-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+        .coach-item:last-child { border-bottom: none; }
+        .coach-num { width: 22px; height: 22px; background: #00c96b; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+        .coach-text { font-size: 13px; color: #475569; line-height: 1.6; }
+        .back-btn { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid #e8ecf0; background: transparent; color: #94a3b8; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+        .back-btn:hover { border-color: #00c96b; color: #00c96b; }
+        .section-title { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+        @media (max-width: 480px) { .features-grid { grid-template-columns: 1fr; } }
+        .feature-card { background: #fff; border: 1px solid #e8ecf0; border-radius: 14px; padding: 16px; cursor: pointer; transition: all 0.2s; }
+        .feature-card:hover { border-color: #00c96b; transform: translateY(-2px); box-shadow: 0 6px 20px #00c96b10; }
+        .feature-card.hero-card { border: 2px solid #00c96b; grid-column: 1 / -1; }
+        .feature-icon { font-size: 20px; margin-bottom: 8px; }
+        .feature-tag { font-size: 9px; font-weight: 700; color: #00c96b; background: #f0fdf7; padding: 2px 7px; border-radius: 8px; display: inline-block; margin-bottom: 5px; }
+        .feature-title { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 3px; }
+        .feature-desc { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+        .breach-preview { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .breach-pill { display: flex; align-items: center; gap: 4px; background: #f8fafc; border: 1px solid #e8ecf0; border-radius: 20px; padding: 3px 8px; font-size: 10px; color: #64748b; }
+        .breach-dot { width: 5px; height: 5px; border-radius: 50%; background: #ef4444; flex-shrink: 0; }
+
+        /* QR PREVIEW */
+        .qr-data-box { background: #f8fafc; border: 1px solid #e8ecf0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #475569; word-break: break-all; margin-top: 8px; font-family: monospace; }
+
+        .ai-float { position: fixed; bottom: 20px; right: 20px; z-index: 999; }
+        .ai-float-btn { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #00c96b, #00a855); border: none; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 25px #00c96b40; animation: pulse 2s ease infinite; transition: all 0.2s; }
+        .ai-float-btn:hover { transform: scale(1.1); }
+        @keyframes pulse { 0%,100%{box-shadow:0 6px 25px #00c96b40} 50%{box-shadow:0 6px 35px #00c96b60} }
+        .ai-chat { display: none; position: fixed; bottom: 82px; right: 16px; width: min(340px, calc(100vw - 32px)); background: #fff; border: 1px solid #e8ecf0; border-radius: 18px; box-shadow: 0 15px 50px #00000012; z-index: 998; overflow: hidden; flex-direction: column; }
+        .ai-chat.show { display: flex; animation: fadeUp 0.3s ease; }
+        .ai-chat-head { padding: 12px 16px; background: linear-gradient(135deg, #00c96b, #00a855); display: flex; align-items: center; gap: 10px; }
+        .ai-chat-head-title { color: #fff; font-weight: 800; font-size: 13px; }
+        .ai-chat-head-sub { color: #ffffff90; font-size: 10px; }
+        .ai-close { margin-left: auto; background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; }
+        .ai-msgs { flex: 1; padding: 12px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 12px; line-height: 1.6; animation: fadeUp 0.3s ease; }
+        .msg.bot { background: #f0fdf7; color: #1a1a2e; border: 1px solid #dcfce7; align-self: flex-start; border-radius: 4px 12px 12px 12px; }
+        .msg.user { background: linear-gradient(135deg, #00c96b, #00a855); color: #fff; align-self: flex-end; border-radius: 12px 12px 4px 12px; }
+        .msg.thinking { background: #f8fafc; color: #94a3b8; font-style: italic; align-self: flex-start; }
+        .ai-input-row { padding: 10px 12px; border-top: 1px solid #f1f5f9; display: flex; gap: 6px; }
+        .ai-input { flex: 1; border: 1.5px solid #e8ecf0; border-radius: 8px; padding: 8px 12px; font-size: 12px; outline: none; color: #1a1a2e; background: #f8fafc; }
+        .ai-input:focus { border-color: #00c96b; }
+        .ai-send { width: 34px; height: 34px; border-radius: 8px; border: none; background: linear-gradient(135deg, #00c96b, #00a855); color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .ai-popup { display: none; position: fixed; inset: 0; background: #00000050; z-index: 9999; align-items: center; justify-content: center; padding: 16px; }
+        .ai-popup.show { display: flex; }
+        .ai-popup-box { background: #fff; border-radius: 16px; padding: 24px; max-width: 440px; width: 100%; box-shadow: 0 20px 60px #00000020; animation: fadeUp 0.3s ease; position: relative; }
+        .ai-popup-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+        .ai-popup-engine { font-size: 15px; font-weight: 800; color: #1a1a2e; margin-bottom: 14px; }
+        .ai-popup-body { font-size: 13px; color: #475569; line-height: 1.8; }
+        .ai-popup-close { position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 16px; cursor: pointer; color: #94a3b8; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        footer { text-align: center; padding: 20px 16px; color: #cbd5e1; font-size: 11px; border-top: 1px solid #e8ecf0; }
+
+        /* TABS */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* SECRET TOOLS */
+        .secret-wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 80px; }
+        .secret-section { background: #fff; border: 1px solid #e8ecf0; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+        .secret-section-title { font-size: 13px; font-weight: 900; color: #1a1a2e; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .secret-section-sub { font-size: 11px; color: #94a3b8; margin-bottom: 14px; }
+        .secret-tag { font-size: 9px; font-weight: 700; color: #7c3aed; background: #f3e8ff; padding: 2px 7px; border-radius: 8px; }
+        .secret-textarea { width: 100%; border: 1.5px solid #e8ecf0; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #1a1a2e; outline: none; resize: vertical; min-height: 90px; font-family: 'Segoe UI', sans-serif; transition: border 0.2s; background: #f8fafc; }
+        .secret-textarea:focus { border-color: #00c96b; background: #fff; }
+        .secret-input { width: 100%; border: 1.5px solid #e8ecf0; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #1a1a2e; outline: none; font-family: 'Segoe UI', sans-serif; transition: border 0.2s; background: #f8fafc; margin-bottom: 10px; }
+        .secret-input:focus { border-color: #00c96b; background: #fff; }
+        .secret-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 540px) { .secret-grid { grid-template-columns: 1fr; } }
+        .secret-btn { width: 100%; padding: 11px; border-radius: 10px; border: none; background: linear-gradient(135deg, #00c96b, #00a855); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.2s; margin-top: 10px; }
+        .secret-btn:hover { transform: translateY(-1px); }
+        .secret-btn.purple { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+        .secret-btn.outline { background: transparent; border: 1.5px solid #e8ecf0; color: #64748b; }
+        .secret-btn.outline:hover { border-color: #00c96b; color: #00c96b; transform: none; }
+        .secret-result { background: #f0fdf7; border: 1px solid #86efac; border-radius: 10px; padding: 12px 14px; margin-top: 10px; font-size: 13px; color: #1a1a2e; word-break: break-all; line-height: 1.7; display: none; }
+        .secret-result.show { display: block; animation: fadeUp 0.3s ease; }
+        .secret-result.danger { background: #fff5f5; border-color: #fca5a5; }
+        .secret-result.purple-r { background: #faf5ff; border-color: #c4b5fd; }
+        .secret-result-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .secret-result-text { font-family: monospace; font-size: 13px; color: #1a1a2e; word-break: break-all; }
+        .copy-btn { font-size: 11px; color: #00c96b; background: none; border: 1px solid #00c96b30; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 8px; transition: all 0.2s; display: inline-block; }
+        .copy-btn:hover { background: #f0fdf7; }
+        .passphrase-words { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .passphrase-word { background: #f0fdf7; border: 1px solid #86efac; border-radius: 8px; padding: 4px 10px; font-size: 13px; font-weight: 700; color: #16a34a; }
+        .steg-upload { border: 2px dashed #e8ecf0; border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; margin-bottom: 10px; }
+        .steg-upload:hover { border-color: #00c96b; background: #f0fdf7; }
+        .steg-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+        .steg-preview { max-width: 100%; max-height: 160px; border-radius: 8px; margin-top: 8px; display: none; }
+        .steg-preview.show { display: block; }
+
+        /* SECRET TOOL CARDS */
+        .secret-cards-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+        @media (max-width: 600px) { .secret-cards-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) and (min-width: 601px) { .secret-cards-grid { grid-template-columns: 1fr 1fr; } }
+        .secret-tool-card { background: #fff; border: 1.5px solid #e8ecf0; border-radius: 18px; padding: 24px 18px; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .secret-tool-card:hover { border-color: #00c96b; transform: translateY(-4px); box-shadow: 0 10px 30px #00c96b12; }
+        .stc-icon { font-size: 36px; margin-bottom: 12px; }
+        .stc-title { font-size: 15px; font-weight: 900; color: #1a1a2e; margin-bottom: 8px; }
+        .stc-desc { font-size: 12px; color: #64748b; line-height: 1.6; margin-bottom: 12px; }
+        .stc-badge { font-size: 9px; font-weight: 700; color: #7c3aed; background: #f3e8ff; padding: 3px 10px; border-radius: 20px; display: inline-block; }
+        .back-to-tools { background: none; border: 1.5px solid #e8ecf0; border-radius: 10px; padding: 8px 16px; font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; margin: 16px 0 12px; transition: all 0.2s; display: block; }
+        .back-to-tools:hover { border-color: #00c96b; color: #00c96b; }
+        .stool-label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="ai-popup" id="aiPopup">
+    <div class="ai-popup-box">
+        <button class="ai-popup-close" onclick="closePopup()">✕</button>
+        <div class="ai-popup-label">AI Explanation</div>
+        <div class="ai-popup-engine" id="popupEngine"></div>
+        <div class="ai-popup-body" id="popupBody"><div style="display:flex;align-items:center;gap:8px;color:#94a3b8"><div class="spinner"></div><span>AI is explaining...</span></div></div>
+    </div>
+</div>
+
+<div class="ai-float">
+    <button class="ai-float-btn" onclick="toggleChat()">🤖</button>
+</div>
+<div class="ai-chat" id="aiChat">
+    <div class="ai-chat-head">
+        <div style="font-size:18px;">🤖</div>
+        <div>
+            <div class="ai-chat-head-title">ByteX AI</div>
+            <div class="ai-chat-head-sub">Your cyber security assistant</div>
+        </div>
+        <button class="ai-close" onclick="toggleChat()">✕</button>
+    </div>
+    <div class="ai-msgs" id="chatMsgs">
+        <div class="msg bot">Hey! I am ByteX AI built by Pushkar. Ask me anything about cyber security! 🔒</div>
+    </div>
+    <div class="ai-input-row">
+        <input class="ai-input" id="chatInput" placeholder="Ask anything..." onkeydown="if(event.key==='Enter') sendChat()" />
+        <button class="ai-send" onclick="sendChat()">➤</button>
+    </div>
+</div>
+
+<nav class="navbar">
+    <div class="nav-left">
+        <div class="logo">Byte<span>X</span></div>
+        <div class="nav-tabs">
+            <button class="nav-tab-btn active" id="tabSecurity" onclick="switchTab('security')">🔒 Security</button>
+            <button class="nav-tab-btn" id="tabSecret" onclick="switchTab('secret')">🕵️ Secret Tools</button>
+        </div>
+    </div>
+    <div class="nav-badge">INDIA'S AI CYBER DOCTOR</div>
+</nav>
+
+<div id="tab-security" class="tab-content active">
+<div class="hero">
+    <div class="hero-badge">BUILT FOR 1.4 BILLION INDIANS</div>
+    <h1><span class="green" id="typingText"></span><span class="cursor"></span></h1>
+    <p>URL, email, password, IP, WhatsApp — just paste anything and ByteX figures it out</p>
+</div>
+
+<!-- UNIVERSAL SEARCH BAR -->
+<div class="search-wrap">
+    <div class="search-box">
+        <span class="detect-badge" id="detectBadge">Paste anything</span>
+        <input id="mainInput" placeholder="URL, email, password, IP address, WhatsApp message..." oninput="detectInput(this.value)" onkeydown="if(event.key==='Enter') runScan()" />
+        <button class="scan-btn" id="scanBtn" onclick="runScan()">Analyze</button>
+    </div>
+    <div class="detect-tags">
+        <span class="detect-tag">🌐 URL</span>
+        <span class="detect-tag">📧 Email</span>
+        <span class="detect-tag">🔑 Password</span>
+        <span class="detect-tag">🌍 IP Address</span>
+        <span class="detect-tag">💬 WhatsApp</span>
+    </div>
+    <!-- PASSWORD STRENGTH METER — shows only when password detected -->
+    <div class="strength-wrap" id="strengthWrap">
+        <div class="strength-bars">
+            <div class="strength-bar" id="sb1"></div>
+            <div class="strength-bar" id="sb2"></div>
+            <div class="strength-bar" id="sb3"></div>
+            <div class="strength-bar" id="sb4"></div>
+            <div class="strength-bar" id="sb5"></div>
+        </div>
+        <div class="strength-row">
+            <span class="strength-label" id="strengthLabel">Weak</span>
+            <span class="strength-tip" id="strengthTip">Keep typing...</span>
+        </div>
+    </div>
+</div>
+
+<!-- UPLOAD ZONE -->
+<div class="upload-divider" style="max-width:640px;margin:12px auto 0;padding:0 16px;">
+    <div class="upload-divider-line"></div>
+    <span class="upload-divider-text">or upload a file / QR code</span>
+    <div class="upload-divider-line"></div>
+</div>
+<div class="upload-grid">
+    <!-- File Scanner Card -->
+    <div class="upload-card" id="fileCard" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleFileDrop(event,'file')">
+        <input type="file" id="fileInput" onchange="handleFileUpload(event,'file')" accept="*/*" />
+        <div class="upload-icon">📁</div>
+        <div class="upload-title">Scan a File</div>
+        <div class="upload-sub">Any file up to 32MB</div>
+        <div class="upload-badge">70+ engines scan it</div>
+    </div>
+    <!-- QR Scanner Card -->
+    <div class="upload-card" id="qrCard" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleFileDrop(event,'qr')">
+        <input type="file" id="qrInput" onchange="handleFileUpload(event,'qr')" accept="image/*" />
+        <div class="upload-icon">📷</div>
+        <div class="upload-title">Scan a QR Code</div>
+        <div class="upload-sub">Upload QR image</div>
+        <div class="upload-badge">Extracts + scans URL</div>
+    </div>
+</div>
+
+<!-- SAFETY SCORE -->
+
+
+<div class="score-bar">
+    <div class="score-inner">
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <div class="score-num" id="scoreNum">100</div>
+            <div>
+                <div class="score-grade" id="scoreGrade">A+</div>
+                <div class="score-lbl">Safety Score</div>
+            </div>
+        </div>
+        <div class="score-track-wrap">
+            <div class="score-track"><div class="score-fill" id="scoreFill"></div></div>
+            <div class="score-desc" id="scoreDesc">Scan something to build your score</div>
+        </div>
+    </div>
+</div>
+
+<div class="main-wrap">
+    <div class="loading-wrap" id="mainLoading">
+        <div class="spinner"></div>
+        <span id="loadingText">Analyzing...</span>
+    </div>
+    <div class="progress-wrap" id="urlProgress">
+        <div class="progress-top">
+            <span id="progressLabel">Submitting to engines...</span>
+            <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+    <div class="result-area" id="resultArea"></div>
+
+    <div id="featureSection">
+        <div class="section-title">All Features</div>
+        <div class="features-grid">
+            <div class="feature-card hero-card" onclick="loadExample('breach')">
+                <div class="feature-tag">HERO FEATURE</div>
+                <div class="feature-title">Personal Breach Timeline</div>
+                <div class="feature-desc">Enter your email — see every data breach it was involved in, when it happened, and what data was exposed.</div>
+                <div class="breach-preview">
+                    <div class="breach-pill"><div class="breach-dot"></div>Adobe 2013</div>
+                    <div class="breach-pill"><div class="breach-dot" style="background:#f59e0b"></div>LinkedIn 2016</div>
+                    <div class="breach-pill"><div class="breach-dot"></div>Facebook 2021</div>
+                </div>
+            </div>
+            <div class="feature-card" onclick="loadExample('url')">
+                <div class="feature-icon">🔍</div>
+                <div class="feature-tag">AI POWERED</div>
+                <div class="feature-title">AI Threat Investigator</div>
+                <div class="feature-desc">Paste any URL — 70+ engines scan it and AI explains why it is dangerous.</div>
+            </div>
+            <div class="feature-card" onclick="loadExample('whatsapp')">
+                <div class="feature-icon">📱</div>
+                <div class="feature-tag">INDIA SPECIAL</div>
+                <div class="feature-title">WhatsApp Checker</div>
+                <div class="feature-desc">Paste any forwarded message — AI detects if it is a scam or fake news.</div>
+            </div>
+            <div class="feature-card" onclick="loadExample('password')">
+                <div class="feature-icon">🔑</div>
+                <div class="feature-tag">REAL DATA</div>
+                <div class="feature-title">Password Breach Check</div>
+                <div class="feature-desc">Check if your password was leaked in any known data breach.</div>
+            </div>
+            <div class="feature-card" onclick="loadExample('ip')">
+                <div class="feature-icon">🌍</div>
+                <div class="feature-tag">NEW</div>
+                <div class="feature-title">IP Address Checker</div>
+                <div class="feature-desc">Paste any IP address — see location, ISP, and if it is a known threat.</div>
+            </div>
+            <div class="feature-card" onclick="document.getElementById('fileInput').click()">
+                <div class="feature-icon">📁</div>
+                <div class="feature-tag">NEW</div>
+                <div class="feature-title">File Scanner</div>
+                <div class="feature-desc">Upload any file up to 32MB — 70+ antivirus engines scan it instantly.</div>
+            </div>
+            <div class="feature-card" onclick="document.getElementById('qrInput').click()">
+                <div class="feature-icon">📷</div>
+                <div class="feature-tag">NEW</div>
+                <div class="feature-title">QR Code Scanner</div>
+                <div class="feature-desc">Upload a QR code image — ByteX extracts the URL and scans it for threats.</div>
+            </div>
+            <div class="feature-card" onclick="loadExample('coach')">
+                <div class="feature-icon">🧠</div>
+                <div class="feature-tag">UNIQUE</div>
+                <div class="feature-title">AI Security Coach</div>
+                <div class="feature-desc">After every scan ByteX gives you a personalized 3-step action plan.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+</div><!-- end tab-security -->
+
+<!-- SECRET TOOLS TAB -->
+<div id="tab-secret" class="tab-content">
+<div class="secret-wrap">
+
+    <!-- TOOL CARDS — shown by default -->
+    <div id="secretCards">
+        <div style="text-align:center;padding:30px 0 20px;">
+            <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:2px;margin-bottom:8px;">SECRET TOOLS</div>
+            <div style="font-size:clamp(22px,5vw,32px);font-weight:900;color:#1a1a2e;margin-bottom:8px;">Choose a Tool</div>
+            <div style="font-size:14px;color:#64748b;">Click any tool below to open it</div>
+        </div>
+        <div class="secret-cards-grid">
+            <div class="secret-tool-card" onclick="openSecretTool('encrypt')">
+                <div class="stc-icon">🔐</div>
+                <div class="stc-title">Text Encrypt / Decrypt</div>
+                <div class="stc-desc">Encrypt any message with a secret key. Share the code — only person with key can read it.</div>
+                <div class="stc-badge">AES-STYLE</div>
+            </div>
+            <div class="secret-tool-card" onclick="openSecretTool('steg')">
+                <div class="stc-icon">🖼️</div>
+                <div class="stc-title">Steganography</div>
+                <div class="stc-desc">Hide a secret message inside any image. Also detect hidden messages from suspicious images.</div>
+                <div class="stc-badge">HIDE IN IMAGE</div>
+            </div>
+            <div class="secret-tool-card" onclick="openSecretTool('destruct')">
+                <div class="stc-icon">💣</div>
+                <div class="stc-title">Self-Destruct Message</div>
+                <div class="stc-desc">Type a message — get a code. Share the code once. After it is read, the message is gone forever.</div>
+                <div class="stc-badge">ONE TIME ONLY</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENCRYPT / DECRYPT TOOL -->
+    <div id="toolEncrypt" class="secret-tool-panel" style="display:none;">
+        <button class="back-to-tools" onclick="closeSecretTool()">← Back to Tools</button>
+        <div class="secret-section">
+            <div class="secret-section-title">🔐 Text Encryptor / Decryptor <span class="secret-tag">AES-STYLE</span></div>
+            <div class="secret-section-sub">Encrypt your message with a secret key → share the encrypted code → friend uses same key to decrypt.</div>
+            <div class="secret-grid">
+                <div>
+                    <div class="stool-label">Encrypt</div>
+                    <textarea class="secret-textarea" id="encryptInput" placeholder="Type your secret message here..."></textarea>
+                    <input class="secret-input" id="encryptKey" placeholder="Your secret key (e.g. mykey123)" style="margin-top:8px;" />
+                    <button class="secret-btn" onclick="doEncrypt()">🔒 Encrypt Message</button>
+                    <div class="secret-result purple-r" id="encryptResult">
+                        <div class="secret-result-label">Encrypted Code — Share this</div>
+                        <div class="secret-result-text" id="encryptOutput"></div>
+                        <button class="copy-btn" onclick="copyText('encryptOutput')">📋 Copy Code</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="stool-label">Decrypt</div>
+                    <textarea class="secret-textarea" id="decryptInput" placeholder="Paste the encrypted code here..."></textarea>
+                    <input class="secret-input" id="decryptKey" placeholder="Same secret key used to encrypt" style="margin-top:8px;" />
+                    <button class="secret-btn purple" onclick="doDecrypt()">🔓 Decrypt Message</button>
+                    <div class="secret-result" id="decryptResult">
+                        <div class="secret-result-label">Decrypted Message</div>
+                        <div class="secret-result-text" id="decryptOutput"></div>
+                        <button class="copy-btn" onclick="copyText('decryptOutput')">📋 Copy Message</button>
+                    </div>
+                    <div class="secret-result danger" id="decryptError" style="display:none;">
+                        <div class="secret-result-label">Wrong Key!</div>
+                        <div class="secret-result-text" id="decryptErrorMsg"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEGANOGRAPHY TOOL -->
+    <div id="toolSteg" class="secret-tool-panel" style="display:none;">
+        <button class="back-to-tools" onclick="closeSecretTool()">← Back to Tools</button>
+        <div class="secret-section">
+            <div class="secret-section-title">🖼️ Steganography <span class="secret-tag">HIDE IN IMAGE</span></div>
+            <div class="secret-section-sub">Hide secret text inside any image pixel-by-pixel. The image looks exactly the same but carries your hidden message!</div>
+            <div class="secret-grid">
+                <div>
+                    <div class="stool-label">Hide Message in Image</div>
+                    <div class="steg-upload" id="stegHideUpload">
+                        <input type="file" accept="image/*" id="stegHideFile" onchange="previewStegImage(event,'stegHidePreview','stegHideUpload')" />
+                        <div id="stegHideUploadText">📁 Click or drop image here</div>
+                        <img class="steg-preview" id="stegHidePreview" />
+                    </div>
+                    <textarea class="secret-textarea" id="stegMessage" placeholder="Type secret message to hide..."></textarea>
+                    <button class="secret-btn" onclick="hideInImage()" style="margin-top:8px;">🖼️ Hide Message</button>
+                    <div class="secret-result purple-r" id="stegHideResult" style="margin-top:10px;">
+                        <div class="secret-result-label">Done! Download your image</div>
+                        <div id="stegDownloadLink"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="stool-label">Detect Hidden Message</div>
+                    <div class="steg-upload" id="stegDetectUpload">
+                        <input type="file" accept="image/*" id="stegDetectFile" onchange="previewStegImage(event,'stegDetectPreview','stegDetectUpload')" />
+                        <div id="stegDetectUploadText">📁 Upload suspicious image</div>
+                        <img class="steg-preview" id="stegDetectPreview" />
+                    </div>
+                    <button class="secret-btn purple" onclick="detectInImage()">🔍 Detect Hidden Message</button>
+                    <div class="secret-result" id="stegDetectResult" style="margin-top:10px;">
+                        <div class="secret-result-label">Hidden Message Found!</div>
+                        <div class="secret-result-text" id="stegDetectOutput"></div>
+                    </div>
+                    <div class="secret-result danger" id="stegNoMessage" style="margin-top:10px;display:none;">
+                        <div class="secret-result-label">Result</div>
+                        <div class="secret-result-text">No hidden message found in this image.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SELF-DESTRUCT MESSAGE TOOL -->
+    <div id="toolDestruct" class="secret-tool-panel" style="display:none;">
+        <button class="back-to-tools" onclick="closeSecretTool()">← Back to Tools</button>
+        <div class="secret-section">
+            <div class="secret-section-title">💣 Self-Destruct Message <span class="secret-tag">ONE TIME ONLY</span></div>
+            <div class="secret-section-sub">Type a message → get a secret code. Share the code with your friend. When they enter the code and read it — the message is destroyed forever. Works only once!</div>
+            <div class="secret-grid">
+                <div>
+                    <div class="stool-label">Create Secret Message</div>
+                    <textarea class="secret-textarea" id="destructInput" placeholder="Type your secret message here...&#10;&#10;This message will self-destruct after being read once!"></textarea>
+                    <button class="secret-btn" style="background:linear-gradient(135deg,#ef4444,#dc2626);" onclick="createDestructMessage()">💣 Create Self-Destruct Message</button>
+                    <div class="secret-result purple-r" id="destructCreateResult" style="margin-top:10px;">
+                        <div class="secret-result-label">Your One-Time Code — Share this!</div>
+                        <div class="secret-result-text" id="destructCode" style="font-size:22px;font-weight:900;letter-spacing:4px;color:#7c3aed;"></div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:6px;">⚠️ Once your friend reads it — it vanishes forever!</div>
+                        <button class="copy-btn" onclick="copyText('destructCode')">📋 Copy Code</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="stool-label">Read Secret Message</div>
+                    <input class="secret-input" id="destructReadCode" placeholder="Enter the one-time code here..." style="font-size:18px;font-weight:700;letter-spacing:3px;text-align:center;" />
+                    <button class="secret-btn purple" onclick="readDestructMessage()">🔓 Read Message</button>
+                    <div class="secret-result" id="destructReadResult" style="margin-top:10px;">
+                        <div class="secret-result-label">Secret Message (now destroyed!)</div>
+                        <div class="secret-result-text" id="destructReadOutput"></div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:8px;">💣 This message has been permanently deleted.</div>
+                    </div>
+                    <div class="secret-result danger" id="destructError" style="margin-top:10px;display:none;">
+                        <div class="secret-result-label">Message Not Found</div>
+                        <div class="secret-result-text">This code is invalid or the message was already read and destroyed.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+</div><!-- end tab-secret -->
+
+<footer>ByteX 2026 — Built by Pushkar. India's first AI-powered cybersecurity platform for everyone.</footer>
+
+<script>
+var currentType = ''
+var score = 100
+var scanCount = 0
+
+// TYPING ANIMATION
+var phrases = ['Just Paste. ByteX Does The Rest.', 'India ka Cyber Doctor.', 'Scan. Analyze. Stay Safe.', 'AI Security For Everyone.']
+var pi = 0, ci = 0, deleting = false
+function type() {
+    var el = document.getElementById('typingText')
+    var phrase = phrases[pi]
+    if (!deleting) {
+        el.textContent = phrase.slice(0, ++ci)
+        if (ci === phrase.length) { deleting = true; setTimeout(type, 2000); return; }
+    } else {
+        el.textContent = phrase.slice(0, --ci)
+        if (ci === 0) { deleting = false; pi = (pi+1) % phrases.length; }
+    }
+    setTimeout(type, deleting ? 50 : 80)
+}
+type()
+
+// AUTO DETECT INPUT TYPE
+function detectInput(val) {
+    val = val.trim()
+    var badge = document.getElementById('detectBadge')
+    var strengthWrap = document.getElementById('strengthWrap')
+    if (!val) {
+        badge.className = 'detect-badge'
+        badge.textContent = 'Paste anything'
+        currentType = ''
+        strengthWrap.classList.remove('show')
+        return
+    }
+    if (val.match(/^https?:\/\//i) || (val.match(/^[\w-]+\.[a-z]{2,}/i) && !val.includes('@') && !val.includes(' '))) {
+        badge.className = 'detect-badge url'; badge.textContent = 'URL detected'; currentType = 'url'
+        strengthWrap.classList.remove('show')
+    } else if (val.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        badge.className = 'detect-badge email'; badge.textContent = 'Email detected'; currentType = 'email'
+        strengthWrap.classList.remove('show')
+    } else if (val.match(/^(\d{1,3}\.){3}\d{1,3}$/)) {
+        badge.className = 'detect-badge ip'; badge.textContent = 'IP detected'; currentType = 'ip'
+        strengthWrap.classList.remove('show')
+    } else if (val.length >= 4 && val.length <= 64 && !val.includes(' ') && val.split('').length > 3) {
+        badge.className = 'detect-badge password'; badge.textContent = 'Password detected'; currentType = 'password'
+        updateStrengthMeter(val)
+        strengthWrap.classList.add('show')
+    } else {
+        badge.className = 'detect-badge whatsapp'; badge.textContent = 'Message detected'; currentType = 'whatsapp'
+        strengthWrap.classList.remove('show')
+    }
+}
+
+// PASSWORD STRENGTH METER
+function updateStrengthMeter(pass) {
+    var score = 0
+    if (pass.length >= 8) score++
+    if (pass.length >= 12) score++
+    if (/[A-Z]/.test(pass)) score++
+    if (/[0-9]/.test(pass)) score++
+    if (/[^A-Za-z0-9]/.test(pass)) score++
+
+    var colors = ['#ef4444','#ef4444','#f59e0b','#22c55e','#00c96b','#00c96b']
+    var labels = ['Very Weak','Weak','Moderate','Strong','Very Strong','Very Strong']
+    var tips = ['Way too short!','Add uppercase + numbers','Add symbols like @#$','Almost perfect!','Excellent password!','Excellent password!']
+    var color = colors[score]
+
+    for (var i = 1; i <= 5; i++) {
+        var bar = document.getElementById('sb'+i)
+        bar.style.background = i <= score ? color : '#f1f5f9'
+    }
+    document.getElementById('strengthLabel').textContent = labels[score]
+    document.getElementById('strengthLabel').style.color = color
+    document.getElementById('strengthTip').textContent = tips[score]
+}
+
+function loadExample(type) {
+    var examples = {
+        url: 'https://suspicious-site.com',
+        breach: 'test@example.com',
+        whatsapp: 'URGENT! You won Rs 50,000 lottery! Click here to claim now!',
+        password: 'password123',
+        ip: '8.8.8.8',
+        coach: 'URGENT! You won Rs 50,000 lottery! Click here to claim now!'
+    }
+    var input = document.getElementById('mainInput')
+    input.value = examples[type]
+    if (type === 'breach') currentType = 'email'
+    else detectInput(examples[type])
+    input.focus()
+}
+
+// FILE UPLOAD HANDLERS
+function handleFileDrop(event, type) {
+    event.preventDefault()
+    document.getElementById(type === 'file' ? 'fileCard' : 'qrCard').classList.remove('dragover')
+    var file = event.dataTransfer.files[0]
+    if (file) processUpload(file, type)
+}
+
+function handleFileUpload(event, type) {
+    var file = event.target.files[0]
+    if (file) processUpload(file, type)
+}
+
+async function processUpload(file, type) {
+    document.getElementById('resultArea').className = 'result-area'
+    document.getElementById('resultArea').innerHTML = ''
+    if (type === 'file') await scanFile(file)
+    else await scanQR(file)
+}
+
+// MAIN TEXT SCAN
+async function runScan() {
+    var val = document.getElementById('mainInput').value.trim()
+    if (!val) return alert('Please paste something first!')
+    if (!currentType) detectInput(val)
+    if (!currentType) currentType = 'whatsapp'
+    document.getElementById('resultArea').className = 'result-area'
+    document.getElementById('resultArea').innerHTML = ''
+    if (currentType === 'url') await scanURL(val)
+    else if (currentType === 'email') await scanEmail(val)
+    else if (currentType === 'password') await scanPassword(val)
+    else if (currentType === 'ip') await scanIP(val)
+    else await scanWhatsApp(val)
+}
+
+// URL SCAN
+async function scanURL(url) {
+    document.getElementById('scanBtn').disabled = true
+    var progress = document.getElementById('urlProgress')
+    var fill = document.getElementById('progressFill')
+    var pct = document.getElementById('progressPct')
+    var lbl = document.getElementById('progressLabel')
+    progress.classList.add('show')
+    var steps = [[15,'Submitting to VirusTotal...'],[35,'70+ engines scanning...'],[60,'Collecting results...'],[85,'AI investigating...']]
+    var si = 0
+    var iv = setInterval(function() {
+        if (si < steps.length) { fill.style.width=steps[si][0]+'%'; pct.textContent=steps[si][0]+'%'; lbl.textContent=steps[si][1]; si++ }
+    }, 6000)
+    try {
+        var res = await fetch('/check-url', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url:url})})
+        var data = await res.json()
+        clearInterval(iv)
+        fill.style.width='100%'; pct.textContent='100%'; lbl.textContent='Scan complete!'
+        setTimeout(function() {
+            progress.classList.remove('show')
+            if (data.error) { showResult('red','❌','Error',data.error,''); return; }
+            if (data.color==='green') updateScore(true); else updateScore(false)
+            var icons = {green:'✅',red:'🚨',orange:'⚠️'}
+            var statsHTML = buildStats(data.malicious||0, data.suspicious||0, data.harmless||0)
+            var engineHTML = buildEngines(data.engines, data.engines ? data.engines.length : 0)
+            showResult(data.color||'green', icons[data.color]||'🔍', data.verdict||'Scan Complete', data.message||'',
+                statsHTML +
+                '<div class="info-box"><h3>Summary</h3><p>'+(data.message||'')+'</p></div>' +
+                (data.ai_report ? '<div class="info-box"><h3>AI Detective Report</h3><p>'+data.ai_report+'</p></div>' : '') +
+                engineHTML +
+                (data.coach && data.coach.length ? buildCoach(data.coach) : ''))
+        }, 500)
+    } catch(e) {
+        clearInterval(iv); progress.classList.remove('show')
+        showResult('red','❌','Error','Something went wrong. Try again.','')
+    }
+    document.getElementById('scanBtn').disabled = false
+}
+
+// FILE SCAN
+async function scanFile(file) {
+    document.getElementById('scanBtn').disabled = true
+    var progress = document.getElementById('urlProgress')
+    var fill = document.getElementById('progressFill')
+    var pct = document.getElementById('progressPct')
+    var lbl = document.getElementById('progressLabel')
+    progress.classList.add('show')
+    var steps = [[10,'Uploading file...'],[30,'Submitting to VirusTotal...'],[55,'70+ antivirus engines scanning...'],[80,'Collecting results...'],[90,'AI analyzing...']]
+    var si = 0
+    var iv = setInterval(function() {
+        if (si < steps.length) { fill.style.width=steps[si][0]+'%'; pct.textContent=steps[si][0]+'%'; lbl.textContent=steps[si][1]; si++ }
+    }, 8000)
+    try {
+        var formData = new FormData()
+        formData.append('file', file)
+        var res = await fetch('/check-file', {method:'POST', body: formData})
+        var data = await res.json()
+        clearInterval(iv)
+        fill.style.width='100%'; pct.textContent='100%'; lbl.textContent='Scan complete!'
+        setTimeout(function() {
+            progress.classList.remove('show')
+            if (data.error) { showResult('red','❌','Error',data.error,''); return; }
+            if (data.color==='green') updateScore(true); else updateScore(false)
+            var icons = {green:'✅',red:'🚨',orange:'⚠️'}
+            var statsHTML = buildStats(data.malicious||0, data.suspicious||0, data.harmless||0)
+            var engineHTML = buildEngines(data.engines, data.engines ? data.engines.length : 0)
+            showResult(data.color||'green', icons[data.color]||'📁', data.verdict||'Scan Complete', data.message||'',
+                '<div class="info-box"><h3>File Scanned</h3><p>📄 '+(data.filename||file.name)+'</p></div>' +
+                statsHTML +
+                (data.ai_report ? '<div class="info-box"><h3>AI Report</h3><p>'+data.ai_report+'</p></div>' : '') +
+                engineHTML +
+                (data.coach && data.coach.length ? buildCoach(data.coach) : ''))
+        }, 500)
+    } catch(e) {
+        clearInterval(iv); progress.classList.remove('show')
+        showResult('red','❌','Error','File scan failed. Try again.','')
+    }
+    document.getElementById('scanBtn').disabled = false
+}
+
+// QR SCAN
+async function scanQR(file) {
+    document.getElementById('mainLoading').classList.add('show')
+    document.getElementById('loadingText').textContent = 'Reading QR code...'
+    try {
+        var formData = new FormData()
+        formData.append('file', file)
+        var res = await fetch('/check-qr', {method:'POST', body: formData})
+        var data = await res.json()
+        document.getElementById('mainLoading').classList.remove('show')
+        if (data.error) { showResult('red','❌','Error',data.error,''); return; }
+        if (data.color==='green') updateScore(true); else updateScore(false)
+        var icons = {green:'✅',red:'🚨',orange:'⚠️',blue:'📷'}
+        var statsHTML = data.type === 'url' ? buildStats(data.malicious||0, data.suspicious||0, data.harmless||0) : ''
+        var engineHTML = data.engines ? buildEngines(data.engines, data.engines.length) : ''
+        showResult(data.color||'blue', icons[data.color]||'📷', data.verdict||'QR Scanned', data.message||'',
+            '<div class="info-box"><h3>QR Content</h3><p>'+data.qr_data+'</p></div>' +
+            statsHTML +
+            (data.ai_report ? '<div class="info-box"><h3>AI Analysis</h3><p>'+data.ai_report+'</p></div>' : '') +
+            engineHTML +
+            (data.coach && data.coach.length ? buildCoach(data.coach) : ''))
+    } catch(e) {
+        document.getElementById('mainLoading').classList.remove('show')
+        showResult('red','❌','Error','QR scan failed. Try again.','')
+    }
+}
+
+// EMAIL SCAN
+async function scanEmail(email) {
+    document.getElementById('mainLoading').classList.add('show')
+    document.getElementById('loadingText').textContent = 'Checking breach databases...'
+    document.getElementById('scanBtn').disabled = true
+    try {
+        var res = await fetch('/check-breach', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email:email})})
+        var data = await res.json()
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+        if (data.color==='green') updateScore(true); else updateScore(false)
+        var timelineHTML = ''
+        if (data.breaches && data.breaches.length > 0) {
+            var items = data.breaches.map(function(b) {
+                var tags = (b.DataClasses||[]).slice(0,4).map(function(d){return '<span class="timeline-tag">'+d+'</span>'}).join('')
+                var sev = (b.DataClasses||[]).some(function(d){return d.toLowerCase().includes('password')}) ? 'high' : 'medium'
+                var desc = (b.Description||'').replace(/<[^>]+>/g,'').slice(0,100)
+                return '<div class="timeline-item"><div class="timeline-year">'+(b.BreachDate||'').slice(0,4)+'</div><div class="timeline-dot '+sev+'"></div><div><div class="timeline-name">'+b.Name+'</div><div class="timeline-desc">'+desc+'</div><div class="timeline-tags">'+tags+'</div></div></div>'
+            }).join('')
+            timelineHTML = '<div class="info-box"><h3>Breach Timeline — '+data.breaches.length+' found</h3><div>'+items+'</div></div>'
+        }
+        var demoNote = data.demo ? '<div class="info-box" style="border-color:#fcd34d;background:#fffbeb"><h3>Demo Mode</h3><p style="color:#92400e">This is sample data showing how the feature works. Add HIBP API key for real results.</p></div>' : ''
+        showResult(data.color, data.color==='red'?'🚨':'✅', data.verdict, data.message, demoNote + timelineHTML + (data.coach&&data.coach.length ? buildCoach(data.coach) : ''))
+    } catch(e) {
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+        showResult('red','❌','Error','Something went wrong.','')
+    }
+}
+
+// PASSWORD SCAN
+async function scanPassword(pass) {
+    document.getElementById('mainLoading').classList.add('show')
+    document.getElementById('loadingText').textContent = 'Checking breach databases...'
+    document.getElementById('scanBtn').disabled = true
+    try {
+        var res = await fetch('/check-password', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password:pass})})
+        var data = await res.json()
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+        if (data.color==='green') updateScore(true); else updateScore(false)
+        showResult(data.color, data.color==='red'?'🚨':'✅', data.verdict, '',
+            '<div class="info-box"><h3>Details</h3><p>'+data.message+'</p></div>' +
+            (data.coach&&data.coach.length ? buildCoach(data.coach) : ''))
+    } catch(e) {
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+    }
+}
+
+// IP SCAN
+async function scanIP(ip) {
+    document.getElementById('mainLoading').classList.add('show')
+    document.getElementById('loadingText').textContent = 'Looking up IP address...'
+    document.getElementById('scanBtn').disabled = true
+    try {
+        var res = await fetch('/check-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ip:ip})})
+        var data = await res.json()
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+        if (data.error) { showResult('red','❌','Error',data.error,''); return; }
+        if (data.color==='green') updateScore(true); else updateScore(false)
+        var icons = {green:'✅',red:'🚨',orange:'⚠️'}
+        var ipGrid = '<div class="ip-grid">' +
+            '<div class="ip-item"><div class="ip-lbl">IP Address</div><div class="ip-val">'+(data.ip||ip)+'</div></div>' +
+            '<div class="ip-item"><div class="ip-lbl">Country</div><div class="ip-val">'+(data.country||'Unknown')+'</div></div>' +
+            '<div class="ip-item"><div class="ip-lbl">City</div><div class="ip-val">'+(data.city||'Unknown')+', '+(data.region||'')+'</div></div>' +
+            '<div class="ip-item"><div class="ip-lbl">ISP</div><div class="ip-val">'+(data.isp||'Unknown')+'</div></div>' +
+            '<div class="ip-item"><div class="ip-lbl">Proxy/VPN</div><div class="ip-val" style="color:'+(data.is_proxy?'#ef4444':'#22c55e')+'">'+(data.is_proxy?'Yes — Detected':'No')+'</div></div>' +
+            '<div class="ip-item"><div class="ip-lbl">Hosting/Server</div><div class="ip-val" style="color:'+(data.is_hosting?'#f59e0b':'#22c55e')+'">'+(data.is_hosting?'Yes':'No')+'</div></div>' +
+            '</div>'
+        var vtNote = data.vt_checked ? '<div class="info-box"><h3>VirusTotal Check</h3><p>'+(data.vt_malicious > 0 ? '🚨 '+data.vt_malicious+' engines flagged this IP as malicious!' : '✅ Not flagged by any VirusTotal engine.')+'</p></div>' : ''
+        showResult(data.color||'green', icons[data.color]||'🌍', data.verdict||'IP Checked', data.message||'',
+            ipGrid +
+            vtNote +
+            (data.ai_report ? '<div class="info-box"><h3>AI Analysis</h3><p>'+data.ai_report+'</p></div>' : '') +
+            (data.coach&&data.coach.length ? buildCoach(data.coach) : ''))
+    } catch(e) {
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+        showResult('red','❌','Error','IP check failed.','')
+    }
+}
+
+// WHATSAPP SCAN
+async function scanWhatsApp(msg) {
+    document.getElementById('mainLoading').classList.add('show')
+    document.getElementById('loadingText').textContent = 'AI is analyzing the message...'
+    document.getElementById('scanBtn').disabled = true
+    try {
+        var res = await fetch('/check-whatsapp', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg})})
+        var data = await res.json()
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+        if (data.color==='green') updateScore(true); else updateScore(false)
+        var icons = {green:'✅',red:'🚨',orange:'⚠️'}
+        showResult(data.color, icons[data.color]||'📱', data.verdict, '',
+            '<div class="info-box"><h3>AI Analysis</h3><p>'+(data.analysis||'')+'</p></div>' +
+            '<div class="info-box"><h3>Red Flags Found</h3><p>'+(data.red_flags||'No red flags found')+'</p></div>' +
+            (data.coach&&data.coach.length ? buildCoach(data.coach) : ''))
+    } catch(e) {
+        document.getElementById('mainLoading').classList.remove('show')
+        document.getElementById('scanBtn').disabled = false
+    }
+}
+
+// HELPERS
+function buildStats(malicious, suspicious, harmless) {
+    return '<div class="stats-row"><div class="stat-box danger"><div class="n">'+malicious+'</div><div class="l">Malicious</div></div><div class="stat-box warn"><div class="n">'+suspicious+'</div><div class="l">Suspicious</div></div><div class="stat-box safe"><div class="n">'+harmless+'</div><div class="l">Clean</div></div></div>'
+}
+
+function buildEngines(engines, total) {
+    if (!engines || engines.length === 0) return ''
+    var lMap = {malicious:'Malicious',suspicious:'Suspicious',harmless:'Clean',undetected:'Undetected'}
+    var flagged = engines.filter(function(e){return e.category==='malicious'||e.category==='suspicious'})
+    var clean = engines.filter(function(e){return e.category==='harmless'||e.category==='undetected'}).slice(0,12)
+    var rows = flagged.concat(clean).map(function(e) {
+        var sn = e.engine.replace(/'/g,"\\'")
+        var sr = (e.result||'Clean').replace(/'/g,"\\'")
+        return '<div class="engine-row" onclick="explainEngine(\''+sn+'\',\''+sr+'\')"><span class="engine-name">'+e.engine+'</span><span class="engine-badge '+(e.category||'undetected')+'">'+(lMap[e.category]||e.category)+(e.result&&e.result!=='Clean'?' - '+e.result:'')+'</span></div>'
+    }).join('')
+    return '<div class="info-box"><h3>Engine Results — '+total+' scanned</h3><div class="click-hint">Tap any row for AI explanation</div><div class="engines-scroll">'+rows+'</div></div>'
+}
+
+function buildCoach(steps) {
+    if (!steps||!steps.length) return ''
+    var items = steps.map(function(s,i){ return '<div class="coach-item"><div class="coach-num">'+(i+1)+'</div><div class="coach-text">'+s+'</div></div>' }).join('')
+    return '<div class="info-box"><h3>AI Security Coach — Your Action Plan</h3>'+items+'</div>'
+}
+
+function showResult(color, emoji, verdict, sub, extras) {
+    var area = document.getElementById('resultArea')
+    area.className = 'result-area show'
+    area.innerHTML = '<div class="verdict-card '+color+'"><div class="verdict-emoji">'+emoji+'</div><div><div class="verdict-title">'+verdict+'</div>'+(sub?'<div class="verdict-sub">'+sub+'</div>':'')+'</div></div>'+(extras||'')+'<button class="back-btn" onclick="clearResult()">← Scan Something Else</button>'
+    area.scrollIntoView({behavior:'smooth',block:'start'})
+}
+
+function clearResult() {
+    document.getElementById('resultArea').className = 'result-area'
+    document.getElementById('resultArea').innerHTML = ''
+    document.getElementById('mainInput').value = ''
+    document.getElementById('detectBadge').className = 'detect-badge'
+    document.getElementById('detectBadge').textContent = 'Paste anything'
+    document.getElementById('strengthWrap').classList.remove('show')
+    document.getElementById('fileInput').value = ''
+    document.getElementById('qrInput').value = ''
+    currentType = ''
+    window.scrollTo({top:0,behavior:'smooth'})
+}
+
+// SAFETY SCORE
+function updateScore(safe) {
+    scanCount++
+    if (safe) score = Math.min(100, score+5)
+    else score = Math.max(0, score-8)
+    document.getElementById('scoreNum').textContent = score
+    document.getElementById('scoreFill').style.width = score+'%'
+    var grade, color
+    if(score>=90){grade='A+';color='#00c96b'}
+    else if(score>=70){grade='B';color='#22c55e'}
+    else if(score>=50){grade='C';color='#f59e0b'}
+    else if(score>=30){grade='D';color='#f97316'}
+    else{grade='F';color='#ef4444'}
+    document.getElementById('scoreGrade').textContent = grade
+    document.getElementById('scoreGrade').style.color = color
+    document.getElementById('scoreNum').style.color = color
+    document.getElementById('scoreFill').style.background = color
+    document.getElementById('scoreDesc').textContent = scanCount+' scan'+(scanCount>1?'s':'')+' done. '+(safe?'Last scan clean!':'Threat detected!')
+}
+
+// AI CHAT
+function toggleChat() { document.getElementById('aiChat').classList.toggle('show') }
+async function sendChat() {
+    var input = document.getElementById('chatInput')
+    var msg = input.value.trim()
+    if (!msg) return
+    input.value = ''
+    var msgs = document.getElementById('chatMsgs')
+    msgs.innerHTML += '<div class="msg user">'+msg+'</div>'
+    msgs.innerHTML += '<div class="msg thinking" id="thinking">ByteX is thinking...</div>'
+    msgs.scrollTop = msgs.scrollHeight
+    try {
+        var res = await fetch('/ask-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg})})
+        var data = await res.json()
+        var t = document.getElementById('thinking'); if(t) t.remove()
+        msgs.innerHTML += '<div class="msg bot">'+(data.reply||'Sorry could not respond!')+'</div>'
+        msgs.scrollTop = msgs.scrollHeight
+    } catch(e) {
+        var t = document.getElementById('thinking'); if(t) t.remove()
+        msgs.innerHTML += '<div class="msg bot">Sorry something went wrong!</div>'
+    }
+}
+
+// ENGINE POPUP
+async function explainEngine(name, result) {
+    document.getElementById('popupEngine').textContent = name+' — '+result
+    document.getElementById('popupBody').innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#94a3b8"><div class="spinner"></div><span>AI is explaining...</span></div>'
+    document.getElementById('aiPopup').classList.add('show')
+    try {
+        var res = await fetch('/ask-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:result+' detected by '+name+'. Explain in 2 simple sentences what this threat means for a normal person.'})})
+        var data = await res.json()
+        document.getElementById('popupBody').textContent = data.reply||'Could not explain.'
+    } catch(e) { document.getElementById('popupBody').textContent = 'Could not explain. Try again.' }
+}
+function closePopup() { document.getElementById('aiPopup').classList.remove('show') }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TAB SWITCHING
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active') })
+    document.querySelectorAll('.nav-tab-btn').forEach(function(el){ el.classList.remove('active') })
+    document.getElementById('tab-'+tab).classList.add('active')
+    document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active')
+    window.scrollTo({top:0,behavior:'smooth'})
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TEXT ENCRYPT / DECRYPT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function xorEncrypt(text, key) {
+    var result = []
+    for (var i = 0; i < text.length; i++) {
+        result.push(String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length)))
+    }
+    return btoa(unescape(encodeURIComponent(result.join(''))))
+}
+function xorDecrypt(encoded, key) {
+    try {
+        var text = decodeURIComponent(escape(atob(encoded)))
+        var result = []
+        for (var i = 0; i < text.length; i++) {
+            result.push(String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length)))
+        }
+        return result.join('')
+    } catch(e) { return null }
+}
+function doEncrypt() {
+    var msg = document.getElementById('encryptInput').value.trim()
+    var key = document.getElementById('encryptKey').value.trim()
+    if (!msg) return alert('Please type a message to encrypt!')
+    if (!key) return alert('Please enter a secret key!')
+    var final = 'BX:' + xorEncrypt(msg, key)
+    document.getElementById('encryptOutput').textContent = final
+    document.getElementById('encryptResult').classList.add('show')
+}
+function doDecrypt() {
+    var code = document.getElementById('decryptInput').value.trim()
+    var key = document.getElementById('decryptKey').value.trim()
+    document.getElementById('decryptResult').classList.remove('show')
+    document.getElementById('decryptError').style.display = 'none'
+    if (!code) return alert('Please paste the encrypted code!')
+    if (!key) return alert('Please enter the secret key!')
+    var clean = code.startsWith('BX:') ? code.slice(3) : code
+    var decrypted = xorDecrypt(clean, key)
+    if (!decrypted) {
+        document.getElementById('decryptErrorMsg').textContent = 'Wrong key or invalid code!'
+        document.getElementById('decryptError').style.display = 'block'
+        return
+    }
+    document.getElementById('decryptOutput').textContent = decrypted
+    document.getElementById('decryptResult').classList.add('show')
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STEGANOGRAPHY (LSB — pure JS canvas)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+var stegHideImageData = null
+var stegDetectImageData = null
+function previewStegImage(event, previewId, uploadId) {
+    var file = event.target.files[0]
+    if (!file) return
+    var reader = new FileReader()
+    reader.onload = function(e) {
+        var preview = document.getElementById(previewId)
+        preview.src = e.target.result
+        preview.classList.add('show')
+        document.getElementById(uploadId === 'stegHideUpload' ? 'stegHideUploadText' : 'stegDetectUploadText').textContent = 'OK: ' + file.name
+        if (uploadId === 'stegHideUpload') stegHideImageData = e.target.result
+        else stegDetectImageData = e.target.result
+    }
+    reader.readAsDataURL(file)
+}
+function hideInImage() {
+    var msg = document.getElementById('stegMessage').value.trim()
+    if (!stegHideImageData) return alert('Please upload an image first!')
+    if (!msg) return alert('Please type a secret message!')
+    var img = new Image()
+    img.onload = function() {
+        var canvas = document.createElement('canvas')
+        canvas.width = img.width; canvas.height = img.height
+        var ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        var data = imageData.data
+        var fullMsg = msg + '<<<END>>>'
+        var binary = ''
+        for (var i = 0; i < fullMsg.length; i++) {
+            binary += fullMsg.charCodeAt(i).toString(2).padStart(8, '0')
+        }
+        if (binary.length > data.length * 0.75) { alert('Message too long! Use larger image or shorter message.'); return }
+        var bi = 0
+        for (var pi = 0; pi < data.length && bi < binary.length; pi += 4) {
+            data[pi] = (data[pi] & 0xFE) | parseInt(binary[bi]); bi++
+        }
+        ctx.putImageData(imageData, 0, 0)
+        var link = document.createElement('a')
+        link.href = canvas.toDataURL('image/png')
+        link.download = 'bytex-secret.png'
+        link.textContent = 'Download Image with Hidden Message'
+        link.style.cssText = 'display:block;margin-top:8px;color:#7c3aed;font-weight:700;font-size:13px;text-decoration:underline;'
+        var container = document.getElementById('stegDownloadLink')
+        container.innerHTML = ''
+        container.appendChild(link)
+        document.getElementById('stegHideResult').classList.add('show')
+    }
+    img.src = stegHideImageData
+}
+function detectInImage() {
+    if (!stegDetectImageData) return alert('Please upload an image first!')
+    document.getElementById('stegDetectResult').classList.remove('show')
+    document.getElementById('stegNoMessage').style.display = 'none'
+    var img = new Image()
+    img.onload = function() {
+        var canvas = document.createElement('canvas')
+        canvas.width = img.width; canvas.height = img.height
+        var ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+        var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+        var binary = ''; var message = ''
+        for (var pi = 0; pi < data.length; pi += 4) {
+            binary += (data[pi] & 1).toString()
+            if (binary.length % 8 === 0 && binary.length >= 8) {
+                var ch = String.fromCharCode(parseInt(binary.slice(-8), 2))
+                message += ch
+                if (message.includes('<<<END>>>')) {
+                    var found = message.replace('<<<END>>>', '').trim()
+                    if (found && found.length > 0 && /[ -~]/.test(found[0])) {
+                        document.getElementById('stegDetectOutput').textContent = found
+                        document.getElementById('stegDetectResult').classList.add('show')
+                    } else {
+                        document.getElementById('stegNoMessage').style.display = 'block'
+                    }
+                    return
+                }
+                if (message.length > 2000) break
+            }
+        }
+        document.getElementById('stegNoMessage').style.display = 'block'
+    }
+    img.src = stegDetectImageData
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PASSPHRASE GENERATOR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function generatePassphrase() {
+    var nouns = ['Tiger','Eagle','Storm','River','Shadow','Thunder','Crystal','Falcon','Dragon','Phoenix','Cobra','Wolf','Panther','Viper','Hawk','Blaze','Frost','Nebula','Aurora','Cipher']
+    var adjectives = ['Blue','Silent','Swift','Dark','Golden','Steel','Crimson','Electric','Silver','Iron','Savage','Ancient','Hidden','Cosmic','Ninja','Quantum','Stealth','Rapid','Bold','Mystic']
+    var places = ['Delta','Omega','Sigma','Alpha','Zeta','Nova','Prime','Ultra','Hyper','Mega','Echo','Bravo','Foxtrot','Victor','Romeo','Sierra','Tango','Kilo','Lima','Juliet']
+    var count = parseInt(document.getElementById('wordCount').value)
+    var addNums = document.getElementById('addNumbers').checked
+    var addSyms = document.getElementById('addSymbols').checked
+    var symbols = ['!','@','#','$','%','&','*']
+    var parts = []
+    for (var i = 0; i < count; i++) {
+        var pool = i % 3 === 0 ? adjectives : (i % 3 === 1 ? nouns : places)
+        parts.push(pool[Math.floor(Math.random() * pool.length)])
+    }
+    if (addNums) parts.push(String(Math.floor(Math.random() * 900) + 100))
+    if (addSyms) parts.push(symbols[Math.floor(Math.random() * symbols.length)])
+    var passphrase = parts.join('-')
+    var wordsHTML = parts.map(function(w){ return '<span class="passphrase-word">'+w+'</span>' }).join('')
+    document.getElementById('passphraseWords').innerHTML = wordsHTML
+    document.getElementById('passphraseFullText').textContent = passphrase
+    var bits = Math.round(passphrase.length * 5.2)
+    document.getElementById('passphraseStrength').textContent = 'Estimated ~' + bits + ' bits of entropy — ' + (bits > 80 ? 'Very Strong!' : bits > 50 ? 'Strong' : 'Moderate')
+    document.getElementById('passphraseResult').classList.add('show')
+}
+
+// COPY HELPER
+function copyText(id) {
+    var text = document.getElementById(id).textContent
+    navigator.clipboard.writeText(text).then(function() {
+        alert('Copied to clipboard!')
+    }).catch(function() {
+        var ta = document.createElement('textarea')
+        ta.value = text; document.body.appendChild(ta); ta.select()
+        document.execCommand('copy'); document.body.removeChild(ta)
+        alert('Copied!')
+    })
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SECRET TOOLS NAVIGATION
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function openSecretTool(tool) {
+    document.getElementById('secretCards').style.display = 'none'
+    document.querySelectorAll('.secret-tool-panel').forEach(function(el){ el.style.display = 'none' })
+    document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)).style.display = 'block'
+    window.scrollTo({top:0,behavior:'smooth'})
+}
+function closeSecretTool() {
+    document.querySelectorAll('.secret-tool-panel').forEach(function(el){ el.style.display = 'none' })
+    document.getElementById('secretCards').style.display = 'block'
+    window.scrollTo({top:0,behavior:'smooth'})
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SELF-DESTRUCT MESSAGE (localStorage one-time store)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function generateCode() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    var code = ''
+    for (var i = 0; i < 8; i++) {
+        if (i === 4) code += '-'
+        code += chars[Math.floor(Math.random() * chars.length)]
+    }
+    return code
+}
+function createDestructMessage() {
+    var msg = document.getElementById('destructInput').value.trim()
+    if (!msg) return alert('Please type a message first!')
+    var code = generateCode()
+    // Store in localStorage with BX_ prefix
+    localStorage.setItem('BX_' + code, msg)
+    document.getElementById('destructCode').textContent = code
+    document.getElementById('destructCreateResult').classList.add('show')
+    document.getElementById('destructInput').value = ''
+}
+function readDestructMessage() {
+    var code = document.getElementById('destructReadCode').value.trim().toUpperCase()
+    document.getElementById('destructReadResult').classList.remove('show')
+    document.getElementById('destructError').style.display = 'none'
+    if (!code) return alert('Please enter the code!')
+    var msg = localStorage.getItem('BX_' + code)
+    if (!msg) {
+        document.getElementById('destructError').style.display = 'block'
+        return
+    }
+    // DESTROY IT — remove from storage immediately
+    localStorage.removeItem('BX_' + code)
+    document.getElementById('destructReadOutput').textContent = msg
+    document.getElementById('destructReadResult').classList.add('show')
+    document.getElementById('destructReadCode').value = ''
+}
+</script>
+</body>
+</html>

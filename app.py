@@ -416,12 +416,78 @@ Scam Detected|red|This is a lottery scam targeting Indians.|Fake prize, urgency,
 def ask_ai_route():
     message = request.json.get('message', '').strip()
     if not message:
-        return jsonify({"reply": "Please ask me something!"})
-    full_prompt = f"""You are ByteX AI, a friendly cybersecurity assistant built by Pushkar for Indian users.
-Answer in simple language. Keep it short (2-4 sentences max).
+        return jsonify({"reply": "Arre bhai kuch toh poocho! 😄"})
+
+    full_prompt = f"""You are ByteX AI — a cybersecurity assistant built by Pushkar Shinde from Pune.
+
+STRICT RULES:
+- Max 2-3 sentences per reply. NO long paragraphs ever.
+- Be friendly and slightly funny — but BRIEF. Don't overdo it.
+- No essay writing. Get to the point fast.
+- Use 1 emoji max per reply.
+
+FACTS:
+- ByteX = India's AI cybersecurity platform. Tagline: "Scammers hate him. Meet ByteX."
+- Built by Pushkar Shinde (Pune University, vibe coder 😄) + Pavan Biradar (idea partner)
+- Features: URL Scanner, Email Breach, WhatsApp Scam Detector, Password Check, IP Checker, File Scanner, QR Safety, Encrypt/Decrypt, Steganography, Self-Destruct Message
+- Pushkar's links: LinkedIn https://www.linkedin.com/in/pushkar-shinde1608/ | GitHub https://github.com/PushkarEz | Instagram https://www.instagram.com/pushkar_shinde_16/
+- For feedback → tell user to click Feedback in top navigation
+
 Question: {message}"""
+
     reply = ask_ai(full_prompt)
     return jsonify({"reply": reply})
+
+
+@app.route('/submit-feedback', methods=['POST'])
+def submit_feedback():
+    import json
+    from datetime import datetime
+    data = request.json
+    name = data.get('name', 'Anonymous').strip() or 'Anonymous'
+    rating = data.get('rating', 5)
+    category = data.get('category', 'General')
+    message = data.get('message', '').strip()
+    if not message:
+        return jsonify({"error": "Please write your feedback!"})
+    feedback_entry = {
+        "id": int(datetime.now().timestamp()),
+        "name": name,
+        "rating": rating,
+        "category": category,
+        "message": message,
+        "time": datetime.now().strftime("%d %b %Y, %I:%M %p")
+    }
+    feedback_file = 'feedback.json'
+    try:
+        if os.path.exists(feedback_file):
+            with open(feedback_file, 'r') as f:
+                feedbacks = json.load(f)
+        else:
+            feedbacks = []
+        feedbacks.append(feedback_entry)
+        with open(feedback_file, 'w') as f:
+            json.dump(feedbacks, f, indent=2)
+        return jsonify({"success": True, "message": "Feedback saved! Thank you 🙏"})
+    except Exception as e:
+        print("FEEDBACK ERROR:", e)
+        return jsonify({"error": "Could not save feedback. Try again."})
+
+
+@app.route('/get-feedbacks', methods=['GET'])
+def get_feedbacks():
+    import json
+    secret = request.args.get('key', '')
+    if secret != os.environ.get('ADMIN_KEY', 'bytex-admin-2026'):
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        if os.path.exists('feedback.json'):
+            with open('feedback.json', 'r') as f:
+                feedbacks = json.load(f)
+            return jsonify({"feedbacks": feedbacks, "total": len(feedbacks)})
+        return jsonify({"feedbacks": [], "total": 0})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 
 if __name__ == '__main__':

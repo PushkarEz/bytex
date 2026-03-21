@@ -247,8 +247,19 @@ def check_ip():
     ip = request.json.get('ip', '').strip()
     if not ip:
         return jsonify({"error": "No IP address provided"})
+    
+    # Whitelist of known safe public IPs
+    safe_ips = {
+        '8.8.8.8': 'Google Public DNS',
+        '8.8.4.4': 'Google Public DNS',
+        '1.1.1.1': 'Cloudflare DNS',
+        '1.0.0.1': 'Cloudflare DNS',
+        '9.9.9.9': 'Quad9 DNS',
+        '208.67.222.222': 'OpenDNS',
+        '208.67.220.220': 'OpenDNS',
+    }
+    
     try:
-        # ip-api.com — completely free, no key needed
         res = requests.get(f"http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp,org,as,proxy,hosting,query", timeout=10)
         geo = res.json()
         if geo.get('status') == 'fail':
@@ -256,7 +267,6 @@ def check_ip():
         is_proxy = geo.get('proxy', False)
         is_hosting = geo.get('hosting', False)
 
-        # Also check VT if key available
         vt_malicious = 0
         vt_checked = False
         if VT_API_KEY:
@@ -270,9 +280,17 @@ def check_ip():
             except:
                 pass
 
-        if vt_malicious > 0:
+        # Check whitelist first
+        if ip in safe_ips:
+            verdict, color = "TRUSTED IP", "green"
+            message = f"This is {safe_ips[ip]} — a trusted, well-known public IP address."
+        elif vt_malicious >= 3:
             verdict, color = "MALICIOUS IP", "red"
             message = f"{vt_malicious} security engines flagged this IP as malicious."
+        elif vt_malicious >= 1:
+            verdict, color = "LOOKS NORMAL", "green"
+            message = f"1 engine flagged this IP but it's likely a false positive. No real threat detected."
+            vt_malicious = 0  # treat as clean
         elif is_proxy:
             verdict, color = "PROXY / VPN", "orange"
             message = "This IP is a proxy or VPN — often used to hide identity."

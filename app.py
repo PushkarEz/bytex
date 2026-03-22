@@ -4,6 +4,10 @@ import hashlib
 import time
 import os
 import re
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except: pass
 
 app = Flask(__name__)
 
@@ -507,6 +511,37 @@ def get_feedbacks():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+
+def run_telegram_bot():
+    """Run ByteX Telegram bot in background thread"""
+    try:
+        import importlib.util, sys, os
+        # Try different possible filenames
+        bot_files = ["bytex_bot_v2.py", "bytex_bot.py", "bot.py"]
+        bot_path = None
+        for fname in bot_files:
+            if os.path.exists(fname):
+                bot_path = fname
+                break
+        if not bot_path:
+            print("❌ Bot file not found! Make sure bytex_bot_v2.py is in same folder")
+            return
+        spec = importlib.util.spec_from_file_location("bytex_bot", bot_path)
+        bot_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bot_module)
+        bot_module.main()
+    except Exception as e:
+        print(f"Telegram bot error: {e}")
+
+# Start Telegram bot in background thread if token is set
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+if TELEGRAM_BOT_TOKEN:
+    import threading
+    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
+    bot_thread.start()
+    print("✅ ByteX Telegram Bot started in background!")
+else:
+    print("⚠️ TELEGRAM_BOT_TOKEN not set — bot not started")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

@@ -533,15 +533,16 @@ def run_telegram_bot():
     except Exception as e:
         print(f"Telegram bot error: {e}")
 
-# Start Telegram bot in background thread if token is set
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-if TELEGRAM_BOT_TOKEN:
-    import threading
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
-    bot_thread.start()
-    print("✅ ByteX Telegram Bot started in background!")
+# ── START TELEGRAM BOT ──────────────────────────────────
+# Runs at module level so gunicorn also starts the bot
+import threading as _threading
+_tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+if _tg_token:
+    _bot_thread = _threading.Thread(target=run_telegram_bot, daemon=True)
+    _bot_thread.start()
+    print("✅ ByteX Telegram Bot started!")
 else:
-    print("⚠️ TELEGRAM_BOT_TOKEN not set — bot not started")
+    print("⚠️  TELEGRAM_BOT_TOKEN not set — bot not started")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

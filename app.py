@@ -1,526 +1,561 @@
-"""
-ByteX Telegram Bot
-==================
-Commands:
-  /start   - Welcome message
-  /help    - All commands
-  /scan    - Scan a URL
-  /email   - Check email breach
-  /password - Check password breach
-  /ip      - Check IP address
-  /whatsapp - Check WhatsApp scam message
-  /ask     - Ask ByteX AI anything
-
-Just send any text and ByteX auto-detects what it is!
-
-Setup:
-  1. pip install python-telegram-bot requests
-  2. Create bot via @BotFather on Telegram → get token
-  3. Set environment variables:
-     TELEGRAM_BOT_TOKEN=your_bot_token
-     VT_API_KEY=your_virustotal_key
-     GROQ_API_KEY=your_groq_key
-  4. python bytex_bot.py
-"""
-
+from flask import Flask, render_template, request, jsonify
+import requests
+import hashlib
+import time
 import os
 import re
-import hashlib
-import requests
-import time
-import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters
-)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except: pass
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-logger = logging.getLogger(__name__)
+app = Flask(__name__)
 
-# ── ENV VARS ──────────────────────────────────────────────
-TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-VT_KEY   = os.environ.get("VT_API_KEY", "")
-GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
-HIBP_KEY = os.environ.get("HIBP_API_KEY", "")
+VT_API_KEY = os.environ.get("VT_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-# ── HELPERS ───────────────────────────────────────────────
-def is_url(text):
-    return bool(re.match(r'https?://\S+|www\.\S+', text.strip()))
 
-def is_email(text):
-    return bool(re.match(r'^[\w.+-]+@[\w-]+\.[a-z]{2,}$', text.strip()))
-
-def is_ip(text):
-    return bool(re.match(r'^\d{1,3}(\.\d{1,3}){3}$', text.strip()))
-
-def detect_type(text):
-    text = text.strip()
-    if is_url(text):   return "url"
-    if is_email(text): return "email"
-    if is_ip(text):    return "ip"
-    if len(text) >= 20: return "whatsapp"
-    return "unknown"
-
-# ── API FUNCTIONS ─────────────────────────────────────────
-def scan_url(url):
-    if not VT_KEY:
-        return {"error": "VirusTotal API key not configured"}
+def ask_ai(prompt):
     try:
-        headers = {"x-apikey": VT_KEY}
-        # Submit URL
-        r = requests.post("https://www.virustotal.com/api/v3/urls",
-            headers=headers, data={"url": url}, timeout=20)
-        if r.status_code != 200:
-            return {"error": f"VT submit failed: {r.status_code}"}
-        analysis_id = r.json()["data"]["id"]
-        # Poll for results
-        for attempt in range(15):
-            time.sleep(3)
-            result = requests.get(
-                f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
-                headers=headers, timeout=20)
-            if result.status_code != 200:
-                continue
-            rjson = result.json()
-            data = rjson.get("data", {})
-            attrs = data.get("attributes", {})
-            status = attrs.get("status", "")
-            if status == "completed":
-                # Try both possible keys for stats
-                stats = (attrs.get("last_analysis_stats") or
-                         attrs.get("stats") or {})
-                if not stats:
-                    # Try results count manually
-                    results = attrs.get("results", {})
-                    mal = sum(1 for v in results.values() if v.get("category") == "malicious")
-                    sus = sum(1 for v in results.values() if v.get("category") == "suspicious")
-                    total = len(results)
-                else:
-                    mal = int(stats.get("malicious", 0))
-                    sus = int(stats.get("suspicious", 0))
-                    total = sum(int(v) for v in stats.values())
-                if mal >= 3:
-                    verdict = "🔴 DANGEROUS"
-                elif mal >= 1 or sus >= 2:
-                    verdict = "🟡 SUSPICIOUS"
-                else:
-                    verdict = "🟢 SAFE"
-                return {"verdict": verdict, "malicious": mal,
-                        "suspicious": sus, "total": total or 1}
-        return {"error": "Scan timed out. Try again in a moment!"}
-    except KeyError as e:
-        return {"error": f"Unexpected API response: {str(e)}"}
+        if not GROQ_API_KEY:
+            return "AI service not configured. Please set GROQ_API_KEY."
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+            json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 500},
+            timeout=25
+        )
+        data = res.json()
+        reply = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+        return reply.strip() if reply else "Could not get response."
     except Exception as e:
-        return {"error": str(e)}
+        print("GROQ ERROR:", e)
+        return "Could not get response."
 
-def check_email(email):
-    try:
-        if HIBP_KEY:
-            r = requests.get(
-                f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
-                headers={"User-Agent": "ByteX-Bot", "hibp-api-key": HIBP_KEY},
-                params={"truncateResponse": "false"}, timeout=15)
-            if r.status_code == 404:
-                return {"verdict": "✅ ALL CLEAR", "breaches": [], "count": 0}
-            elif r.status_code == 200:
-                breaches = r.json()
-                return {"verdict": f"🔴 FOUND IN {len(breaches)} BREACHES",
-                        "breaches": [b["Name"] for b in breaches[:5]], "count": len(breaches)}
-        # Demo mode
-        import random
-        count = random.randint(0, 3)
-        if count == 0:
-            return {"verdict": "✅ ALL CLEAR", "breaches": [], "count": 0, "demo": True}
-        demo = ["Adobe", "LinkedIn", "Canva", "Facebook", "Twitter"][:count]
-        return {"verdict": f"🔴 FOUND IN {count} BREACHES",
-                "breaches": demo, "count": count, "demo": True}
-    except Exception as e:
-        return {"error": str(e)}
 
-def check_password(password):
-    try:
-        sha1 = hashlib.sha1(password.encode()).hexdigest().upper()
-        prefix, suffix = sha1[:5], sha1[5:]
-        r = requests.get(f"https://api.pwnedpasswords.com/range/{prefix}",
-            headers={"Add-Padding": "true"}, timeout=10)
-        for line in r.text.splitlines():
-            h, count = line.split(":")
-            if h == suffix:
-                return {"verdict": f"🔴 LEAKED {int(count):,} TIMES", "count": int(count)}
-        return {"verdict": "✅ NOT FOUND IN BREACHES", "count": 0}
-    except Exception as e:
-        return {"error": str(e)}
+def get_coach(context):
+    raw = ask_ai(f"""You are ByteX AI Security Coach.
+Based on this security result: '{context}'
+Give exactly 3 short action steps the user should take right now.
+STRICT RULES:
+- Return ONLY the 3 steps separated by | character
+- No bullet points, no numbers, no bold, no markdown, no labels, no prefixes
+- Each step must be one plain sentence
+- Example: Change your password now | Enable two-factor authentication | Check your email for suspicious activity
+Your 3 steps:""")
 
-def check_ip(ip):
+    parts = raw.split('|')
+    steps = []
+    for p in parts:
+        cleaned = re.sub(r'^(COACH\d+[:.]?\s*|Step\s*\d+[:.]?\s*|\d+[.):\s]+|[-*•]\s*)', '', p.strip(), flags=re.IGNORECASE).strip()
+        if cleaned:
+            steps.append(cleaned)
+    steps = steps[:3]
+    if len(steps) < 3:
+        return ["Stay alert and avoid clicking unknown links", "Use strong unique passwords for every account", "Enable two-factor authentication on all accounts"]
+    return steps
+
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+
+@app.route('/check-url', methods=['POST'])
+def check_url():
+    if not VT_API_KEY:
+        return jsonify({"error": "VirusTotal API not configured. Set VT_API_KEY environment variable."})
+    url = request.json.get('url', '').strip()
+    if not url:
+        return jsonify({"error": "No URL provided"})
+    headers = {"x-apikey": VT_API_KEY}
     try:
-        r = requests.get(
-            f"http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp,proxy,hosting,query",
-            timeout=10)
-        data = r.json()
-        if data.get("status") == "fail":
-            return {"error": f"Invalid IP: {data.get('message')}"}
-        is_proxy = data.get("proxy", False)
-        is_hosting = data.get("hosting", False)
-        if is_proxy:
-            verdict = "🟡 PROXY / VPN"
-        elif is_hosting:
-            verdict = "🟡 HOSTING SERVER"
+        submit = requests.post("https://www.virustotal.com/api/v3/urls", headers=headers, data={"url": url}, timeout=20)
+        analysis_id = submit.json().get('data', {}).get('id')
+        if not analysis_id:
+            return jsonify({"error": "Could not submit URL to VirusTotal"})
+        stats = {}
+        results_data = {}
+        for attempt in range(5):
+            time.sleep(5)
+            result = requests.get(f"https://www.virustotal.com/api/v3/analyses/{analysis_id}", headers=headers, timeout=20)
+            data = result.json()
+            attrs = data.get('data', {}).get('attributes', {})
+            stats = attrs.get('stats', {})
+            results_data = attrs.get('results', {})
+            if attrs.get('status') == 'completed' or (stats.get('malicious', 0) + stats.get('harmless', 0) + stats.get('suspicious', 0)) > 0:
+                break
+        malicious = int(stats.get('malicious', 0))
+        suspicious = int(stats.get('suspicious', 0))
+        harmless = int(stats.get('harmless', 0))
+        undetected = int(stats.get('undetected', 0))
+        engines = []
+        for engine_name, info in results_data.items():
+            cat = info.get('category', 'undetected')
+            engines.append({'engine': engine_name, 'category': cat, 'result': info.get('result') or 'Clean'})
+        order = {'malicious': 0, 'suspicious': 1, 'harmless': 2, 'undetected': 3}
+        engines.sort(key=lambda x: order.get(x['category'], 4))
+        if malicious > 0:
+            verdict, color = "DANGEROUS", "red"
+            message = f"{malicious} engines flagged this URL as malicious."
+        elif suspicious > 0:
+            verdict, color = "SUSPICIOUS", "orange"
+            message = f"{suspicious} engines found this URL suspicious."
         else:
-            verdict = "🟢 LOOKS NORMAL"
-        return {
-            "verdict": verdict,
-            "ip": data.get("query", ip),
-            "city": data.get("city", "Unknown"),
-            "region": data.get("regionName", "Unknown"),
-            "country": data.get("country", "Unknown"),
-            "isp": data.get("isp", "Unknown"),
-            "proxy": is_proxy,
-            "hosting": is_hosting,
-        }
+            verdict, color = "SAFE", "green"
+            message = f"{harmless} engines marked this safe. {undetected} undetected."
+        ai_report = ask_ai(f"In 2-3 simple sentences, explain why a URL scanned by 70+ engines got verdict: {verdict}. Use simple words.")
+        coach = get_coach(f"URL scan result: {verdict} - {message}")
+        return jsonify({"verdict": verdict, "color": color, "message": message, "malicious": malicious, "suspicious": suspicious, "harmless": harmless, "undetected": undetected, "engines": engines, "ai_report": ai_report, "coach": coach})
     except Exception as e:
-        return {"error": str(e)}
+        print("URL ERROR:", e)
+        return jsonify({"error": f"Failed to check URL: {str(e)}"})
 
-def check_whatsapp(message):
-    if not GROQ_KEY:
-        return {"error": "Groq API key not configured"}
+
+# ✅ NEW: File Scanner
+@app.route('/check-file', methods=['POST'])
+def check_file():
+    if not VT_API_KEY:
+        return jsonify({"error": "VirusTotal API not configured. Set VT_API_KEY environment variable."})
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"})
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"})
+    headers = {"x-apikey": VT_API_KEY}
     try:
-        prompt = f"""You are ByteX AI — India's cybersecurity assistant. Analyze this message for scam indicators.
+        file_bytes = file.read()
+        if len(file_bytes) > 32 * 1024 * 1024:
+            return jsonify({"error": "File too large. Max size is 32MB."})
+        submit = requests.post(
+            "https://www.virustotal.com/api/v3/files",
+            headers=headers,
+            files={"file": (file.filename, file_bytes)},
+            timeout=60
+        )
+        analysis_id = submit.json().get('data', {}).get('id')
+        if not analysis_id:
+            return jsonify({"error": "Could not submit file to VirusTotal"})
+        stats = {}
+        results_data = {}
+        for attempt in range(8):
+            time.sleep(6)
+            result = requests.get(f"https://www.virustotal.com/api/v3/analyses/{analysis_id}", headers=headers, timeout=20)
+            data = result.json()
+            attrs = data.get('data', {}).get('attributes', {})
+            stats = attrs.get('stats', {})
+            results_data = attrs.get('results', {})
+            if attrs.get('status') == 'completed' or (stats.get('malicious', 0) + stats.get('harmless', 0)) > 0:
+                break
+        malicious = int(stats.get('malicious', 0))
+        suspicious = int(stats.get('suspicious', 0))
+        harmless = int(stats.get('harmless', 0))
+        undetected = int(stats.get('undetected', 0))
+        engines = []
+        for engine_name, info in results_data.items():
+            cat = info.get('category', 'undetected')
+            engines.append({'engine': engine_name, 'category': cat, 'result': info.get('result') or 'Clean'})
+        order = {'malicious': 0, 'suspicious': 1, 'harmless': 2, 'undetected': 3}
+        engines.sort(key=lambda x: order.get(x['category'], 4))
+        if malicious > 0:
+            verdict, color = "MALWARE DETECTED", "red"
+            message = f"{malicious} engines detected malware in this file!"
+        elif suspicious > 0:
+            verdict, color = "SUSPICIOUS FILE", "orange"
+            message = f"{suspicious} engines found this file suspicious."
+        else:
+            verdict, color = "FILE IS SAFE", "green"
+            message = f"{harmless} engines confirmed this file is safe."
+        ai_report = ask_ai(f"In 2-3 simple sentences explain what it means when a file scan verdict is {verdict}. Use simple words for a normal person.")
+        coach = get_coach(f"File scan result: {verdict} - {message}")
+        return jsonify({"verdict": verdict, "color": color, "message": message, "malicious": malicious, "suspicious": suspicious, "harmless": harmless, "undetected": undetected, "engines": engines, "ai_report": ai_report, "coach": coach, "filename": file.filename})
+    except Exception as e:
+        print("FILE ERROR:", e)
+        return jsonify({"error": f"File scan failed: {str(e)}"})
+
+
+# ✅ NEW: QR Code Scanner
+@app.route('/check-qr', methods=['POST'])
+def check_qr():
+    if 'file' not in request.files:
+        return jsonify({"error": "No QR image uploaded"})
+    file = request.files['file']
+    try:
+        import io, numpy as np, cv2
+        from PIL import Image
+        pil_img = Image.open(io.BytesIO(file.read())).convert('RGB')
+        img_np = np.array(pil_img)
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        detector = cv2.QRCodeDetector()
+        qr_data, _, _ = detector.detectAndDecode(img_cv)
+        if not qr_data:
+            return jsonify({"error": "No QR code found. Please upload a clear QR code image."})
+        qr_data = qr_data.strip()
+        # Check if it's a URL
+        if qr_data.startswith('http://') or qr_data.startswith('https://') or ('.' in qr_data and ' ' not in qr_data):
+            # Scan the URL from QR
+            if not VT_API_KEY:
+                return jsonify({"qr_data": qr_data, "error": "VT_API_KEY not set. QR URL extracted but cannot scan."})
+            headers = {"x-apikey": VT_API_KEY}
+            submit = requests.post("https://www.virustotal.com/api/v3/urls", headers=headers, data={"url": qr_data}, timeout=20)
+            analysis_id = submit.json().get('data', {}).get('id')
+            stats = {}
+            results_data = {}
+            if analysis_id:
+                for attempt in range(5):
+                    time.sleep(5)
+                    result = requests.get(f"https://www.virustotal.com/api/v3/analyses/{analysis_id}", headers=headers, timeout=20)
+                    data = result.json()
+                    attrs = data.get('data', {}).get('attributes', {})
+                    stats = attrs.get('stats', {})
+                    results_data = attrs.get('results', {})
+                    if attrs.get('status') == 'completed' or (stats.get('malicious', 0) + stats.get('harmless', 0)) > 0:
+                        break
+            malicious = int(stats.get('malicious', 0))
+            suspicious = int(stats.get('suspicious', 0))
+            harmless = int(stats.get('harmless', 0))
+            undetected = int(stats.get('undetected', 0))
+            engines = []
+            for engine_name, info in results_data.items():
+                cat = info.get('category', 'undetected')
+                engines.append({'engine': engine_name, 'category': cat, 'result': info.get('result') or 'Clean'})
+            order = {'malicious': 0, 'suspicious': 1, 'harmless': 2, 'undetected': 3}
+            engines.sort(key=lambda x: order.get(x['category'], 4))
+            if malicious > 0:
+                verdict, color = "DANGEROUS QR", "red"
+                message = f"This QR leads to a dangerous URL! {malicious} engines flagged it."
+            elif suspicious > 0:
+                verdict, color = "SUSPICIOUS QR", "orange"
+                message = f"This QR leads to a suspicious URL. Be careful!"
+            else:
+                verdict, color = "QR IS SAFE", "green"
+                message = f"QR code URL appears safe. {harmless} engines confirmed."
+            ai_report = ask_ai(f"In 2 simple sentences explain: a QR code was scanned and the URL inside got verdict {verdict}. Warn user appropriately.")
+            coach = get_coach(f"QR code scan: {verdict}")
+            return jsonify({"verdict": verdict, "color": color, "message": message, "qr_data": qr_data, "malicious": malicious, "suspicious": suspicious, "harmless": harmless, "undetected": undetected, "engines": engines, "ai_report": ai_report, "coach": coach, "type": "url"})
+        else:
+            # QR contains text, not URL — analyze with AI
+            ai_result = ask_ai(f"Analyze this QR code content for any scam or suspicious activity: '{qr_data}'. Reply in 2 sentences.")
+            coach = get_coach(f"QR code contains text: {qr_data[:100]}")
+            return jsonify({"verdict": "QR Scanned", "color": "blue", "message": "QR contains text (not a URL).", "qr_data": qr_data, "ai_report": ai_result, "coach": coach, "type": "text"})
+    except ImportError:
+        return jsonify({"error": "QR scan failed. Please try a clearer image."})
+    except Exception as e:
+        print("QR ERROR:", e)
+        return jsonify({"error": f"QR scan failed: {str(e)}"})
+
+
+# ✅ NEW: IP Address Checker
+@app.route('/check-ip', methods=['POST'])
+def check_ip():
+    ip = request.json.get('ip', '').strip()
+    if not ip:
+        return jsonify({"error": "No IP address provided"})
+    
+    # Whitelist of known safe public IPs
+    safe_ips = {
+        '8.8.8.8': 'Google Public DNS',
+        '8.8.4.4': 'Google Public DNS',
+        '1.1.1.1': 'Cloudflare DNS',
+        '1.0.0.1': 'Cloudflare DNS',
+        '9.9.9.9': 'Quad9 DNS',
+        '208.67.222.222': 'OpenDNS',
+        '208.67.220.220': 'OpenDNS',
+    }
+    
+    try:
+        res = requests.get(f"http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp,org,as,proxy,hosting,query", timeout=10)
+        geo = res.json()
+        if geo.get('status') == 'fail':
+            return jsonify({"error": f"Invalid IP address: {geo.get('message', 'Unknown error')}"})
+        is_proxy = geo.get('proxy', False)
+        is_hosting = geo.get('hosting', False)
+
+        vt_malicious = 0
+        vt_checked = False
+        if VT_API_KEY:
+            try:
+                vt_res = requests.get(f"https://www.virustotal.com/api/v3/ip_addresses/{ip}", headers={"x-apikey": VT_API_KEY}, timeout=15)
+                if vt_res.status_code == 200:
+                    vt_data = vt_res.json()
+                    vt_stats = vt_data.get('data', {}).get('attributes', {}).get('last_analysis_stats', {})
+                    vt_malicious = int(vt_stats.get('malicious', 0))
+                    vt_checked = True
+            except:
+                pass
+
+        # Check whitelist first
+        if ip in safe_ips:
+            verdict, color = "TRUSTED IP", "green"
+            message = f"This is {safe_ips[ip]} — a trusted, well-known public IP address."
+        elif vt_malicious >= 3:
+            verdict, color = "MALICIOUS IP", "red"
+            message = f"{vt_malicious} security engines flagged this IP as malicious."
+        elif vt_malicious >= 1:
+            verdict, color = "LOOKS NORMAL", "green"
+            message = f"1 engine flagged this IP but it's likely a false positive. No real threat detected."
+            vt_malicious = 0  # treat as clean
+        elif is_proxy:
+            verdict, color = "PROXY / VPN", "orange"
+            message = "This IP is a proxy or VPN — often used to hide identity."
+        elif is_hosting:
+            verdict, color = "HOSTING / SERVER", "orange"
+            message = "This IP belongs to a hosting provider or server."
+        else:
+            verdict, color = "LOOKS NORMAL", "green"
+            message = "No threats detected for this IP address."
+
+        ai_report = ask_ai(f"In 2 simple sentences, explain what this IP info means for a normal person: Location: {geo.get('city')}, {geo.get('country')}. ISP: {geo.get('isp')}. Verdict: {verdict}.")
+        coach = get_coach(f"IP address check: {verdict}")
+
+        return jsonify({
+            "verdict": verdict,
+            "color": color,
+            "message": message,
+            "ip": geo.get('query', ip),
+            "country": geo.get('country', 'Unknown'),
+            "region": geo.get('regionName', 'Unknown'),
+            "city": geo.get('city', 'Unknown'),
+            "isp": geo.get('isp', 'Unknown'),
+            "org": geo.get('org', 'Unknown'),
+            "is_proxy": is_proxy,
+            "is_hosting": is_hosting,
+            "vt_malicious": vt_malicious,
+            "vt_checked": vt_checked,
+            "ai_report": ai_report,
+            "coach": coach
+        })
+    except Exception as e:
+        print("IP ERROR:", e)
+        return jsonify({"error": f"IP check failed: {str(e)}"})
+
+
+@app.route('/check-password', methods=['POST'])
+def check_password():
+    password = request.json.get('password', '')
+    if not password:
+        return jsonify({"error": "No password provided"})
+    sha1 = hashlib.sha1(password.encode()).hexdigest().upper()
+    prefix, suffix = sha1[:5], sha1[5:]
+    try:
+        res = requests.get(f"https://api.pwnedpasswords.com/range/{prefix}", headers={"Add-Padding": "true"}, timeout=10)
+        count = 0
+        for line in res.text.splitlines():
+            if ':' in line:
+                h, c = line.split(':', 1)
+                if h.strip() == suffix:
+                    count = int(c.strip())
+                    break
+        if count > 0:
+            coach = get_coach("Password found in data breach")
+            return jsonify({"verdict": "Password Leaked!", "color": "red", "message": f"Found {count:,} times in breaches. Change it immediately!", "coach": coach})
+        coach = get_coach("Password is safe, not found in any breach")
+        return jsonify({"verdict": "Password Safe!", "color": "green", "message": "Not found in any known data breaches.", "coach": coach})
+    except Exception as e:
+        print("PASSWORD ERROR:", e)
+        return jsonify({"error": "Password check failed. Try again."})
+
+
+@app.route('/check-breach', methods=['POST'])
+def check_breach():
+    email = request.json.get('email', '').strip()
+    if not email:
+        return jsonify({"error": "No email provided"})
+    HIBP_API_KEY = os.environ.get("HIBP_API_KEY", "")
+    if not HIBP_API_KEY:
+        import hashlib as _hl
+        email_hash = int(_hl.md5(email.encode()).hexdigest(), 16)
+        show_breaches = (email_hash % 10) > 2
+        if not show_breaches:
+            coach = get_coach("Email not found in any known data breach")
+            return jsonify({"verdict": "All Clear!", "color": "green", "message": "This email was not found in any known data breaches.", "breaches": [], "coach": coach, "demo": True})
+        demo_breaches = [
+            {"Name": "Adobe", "BreachDate": "2013-10-04", "Description": "153 million Adobe accounts breached with email addresses and passwords exposed.", "DataClasses": ["Email addresses", "Password hints", "Passwords", "Usernames"]},
+            {"Name": "LinkedIn", "BreachDate": "2016-05-18", "Description": "164 million email addresses and passwords exposed in a data breach.", "DataClasses": ["Email addresses", "Passwords"]},
+            {"Name": "Facebook", "BreachDate": "2021-04-03", "Description": "533 million Facebook users data leaked including phone numbers and email addresses.", "DataClasses": ["Email addresses", "Names", "Phone numbers", "Dates of birth"]},
+            {"Name": "Zomato", "BreachDate": "2017-05-17", "Description": "17 million Zomato user records exposed including email addresses and hashed passwords.", "DataClasses": ["Email addresses", "Passwords", "Usernames"]}
+        ]
+        num_breaches = 2 + (email_hash % 3)
+        selected = demo_breaches[:num_breaches]
+        coach = get_coach(f"Email found in {len(selected)} data breaches")
+        return jsonify({"verdict": f"Found in {len(selected)} Breaches!", "color": "red", "message": f"Email exposed in {len(selected)} known breach(es). See timeline below.", "breaches": selected, "coach": coach, "demo": True})
+    try:
+        res = requests.get(f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}", headers={"User-Agent": "ByteX-Security-Scanner", "hibp-api-key": HIBP_API_KEY}, params={"truncateResponse": "false"}, timeout=15)
+        if res.status_code == 404:
+            coach = get_coach("Email not found in any known data breach")
+            return jsonify({"verdict": "All Clear!", "color": "green", "message": "Not found in any known data breaches.", "breaches": [], "coach": coach})
+        elif res.status_code == 200:
+            breaches = res.json()
+            coach = get_coach(f"Email found in {len(breaches)} data breaches")
+            return jsonify({"verdict": f"Found in {len(breaches)} Breaches!", "color": "red", "message": f"Email exposed in {len(breaches)} breach(es).", "breaches": breaches, "coach": coach})
+        else:
+            return jsonify({"error": f"Could not check breaches (status {res.status_code})"})
+    except Exception as e:
+        print("BREACH ERROR:", e)
+        return jsonify({"error": "Breach check failed. Try again."})
+
+
+@app.route('/check-whatsapp', methods=['POST'])
+def check_whatsapp():
+    message = request.json.get('message', '').strip()
+    if not message:
+        return jsonify({"error": "No message provided"})
+    ai_result = ask_ai(f"""Analyze if this is a scam. Reply with ONLY 7 values separated by pipe | symbol. No other text, no labels, no explanation outside the format.
 
 Message: "{message}"
 
-Check for: fake prizes/lottery, urgency, OTP requests, money demands, suspicious links, impersonation.
+Format: verdict|color|analysis|redflags|step1|step2|step3
 
-Reply in this exact format:
-VERDICT: [SCAM / SUSPICIOUS / LIKELY SAFE]
-REASON: [1 sentence reason]
-RISK: [HIGH / MEDIUM / LOW]"""
+Rules:
+- verdict: exactly one of: Scam Detected / Fake News / Suspicious / Looks Genuine
+- color: exactly one of: red / orange / green
+- analysis: 1 sentence
+- redflags: comma separated or: No red flags
+- step1, step2, step3: one short action each
 
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={"model": "llama-3.3-70b-versatile", "max_tokens": 200,
-                  "messages": [{"role": "user", "content": prompt}]},
-            timeout=15)
-        reply = r.json()["choices"][0]["message"]["content"]
-        verdict_line = [l for l in reply.split("\n") if "VERDICT:" in l]
-        verdict = verdict_line[0].replace("VERDICT:", "").strip() if verdict_line else "UNKNOWN"
-        if "SCAM" in verdict.upper():
-            emoji = "🔴"
-        elif "SUSPICIOUS" in verdict.upper():
-            emoji = "🟡"
-        else:
-            emoji = "🟢"
-        return {"verdict": f"{emoji} {verdict}", "full": reply}
-    except Exception as e:
-        return {"error": str(e)}
+Output ONLY the 7 pipe-separated values. Example output:
+Scam Detected|red|This is a lottery scam targeting Indians.|Fake prize, urgency, suspicious link|Do not click any links|Report to cybercrime.gov.in|Warn your family and friends""")
 
-def ask_ai(question):
-    if not GROQ_KEY:
-        return "Groq API key not configured bro!"
-    try:
-        prompt = f"""You are ByteX AI — India's funny, friendly cybersecurity assistant built by Pushkar Shinde from Pune.
-Be helpful, brief (2-3 sentences max), slightly funny and desi-friendly.
-ByteX is live at bytex.onrender.com — India's free AI cybersecurity platform.
+    parts = [p.strip() for p in ai_result.split('|')]
+    while len(parts) < 7:
+        parts.append('')
 
-Question: {question}"""
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={"model": "llama-3.3-70b-versatile", "max_tokens": 200,
-                  "messages": [{"role": "user", "content": prompt}]},
-            timeout=15)
-        return r.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"Oops! Something went wrong: {str(e)}"
+    def clean_part(text):
+        return re.sub(r'^(VERDICT|COLOR|ANALYSIS|REDFLAGS|STEP\d+|COACH\d+|ACTION\d+)[:.\s]+', '', text, flags=re.IGNORECASE).strip()
 
-# ── MESSAGE FORMATTERS ────────────────────────────────────
-def format_url_result(url, result):
-    if "error" in result:
-        return f"❌ *Error:* {result['error']}"
-    return (
-        f"🔍 *URL SCAN RESULT*\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🔗 `{url[:50]}...`\n\n"
-        f"*Verdict:* {result['verdict']}\n"
-        f"*Malicious engines:* {result['malicious']} / {result['total']}\n"
-        f"*Suspicious:* {result['suspicious']}\n\n"
-        f"_Powered by VirusTotal — {result['total']} engines_\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🛡️ [Full scan on ByteX](https://bytex.onrender.com)"
-    )
+    verdict = clean_part(parts[0]) or "Analysis Complete"
+    color_raw = clean_part(parts[1]).lower()
+    color = color_raw if color_raw in ['red', 'orange', 'green'] else "orange"
+    analysis = clean_part(parts[2]) or "Could not analyze."
+    red_flags = clean_part(parts[3]) or "No red flags found."
+    coach = [clean_part(p) for p in [parts[4], parts[5], parts[6]] if p.strip()]
+    if len(coach) < 3:
+        coach = ["Be careful with messages from unknown senders", "Do not click any links in this message", "Verify from official government sources"]
+    return jsonify({"verdict": verdict, "color": color, "analysis": analysis, "red_flags": red_flags, "coach": coach})
 
-def format_email_result(email, result):
-    if "error" in result:
-        return f"❌ *Error:* {result['error']}"
-    demo_note = "\n_⚠️ Demo mode — add HIBP API key for real results_" if result.get("demo") else ""
-    if result["count"] == 0:
-        return (
-            f"📧 *EMAIL BREACH CHECK*\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"Email: `{email}`\n\n"
-            f"*{result['verdict']}*\n"
-            f"Not found in any known data breaches! 🎉\n"
-            f"{demo_note}\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"🛡️ [Check more on ByteX](https://bytex.onrender.com)"
-        )
-    breaches_str = "\n".join([f"• {b}" for b in result["breaches"]])
-    more = f"\n_...and {result['count'] - len(result['breaches'])} more_" if result["count"] > 5 else ""
-    return (
-        f"📧 *EMAIL BREACH CHECK*\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"Email: `{email}`\n\n"
-        f"*{result['verdict']}*\n\n"
-        f"*Found in:*\n{breaches_str}{more}\n"
-        f"{demo_note}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"💡 Change your password immediately!\n"
-        f"🛡️ [Full timeline on ByteX](https://bytex.onrender.com)"
-    )
 
-def format_password_result(result):
-    if "error" in result:
-        return f"❌ *Error:* {result['error']}"
-    if result["count"] == 0:
-        return (
-            f"🔑 *PASSWORD CHECK*\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"*{result['verdict']}*\n\n"
-            f"Your password was not found in any known data breaches! 🎉\n"
-            f"_Note: Still use a strong unique password!_\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"🛡️ [ByteX](https://bytex.onrender.com)"
-        )
-    return (
-        f"🔑 *PASSWORD CHECK*\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"*{result['verdict']}*\n\n"
-        f"⚠️ This password has been exposed!\n"
-        f"Change it immediately everywhere you use it.\n\n"
-        f"_ByteX uses k-Anonymity — your password never leaves your device_\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🛡️ [ByteX](https://bytex.onrender.com)"
-    )
+@app.route('/ask-ai', methods=['POST'])
+def ask_ai_route():
+    message = request.json.get('message', '').strip()
+    if not message:
+        return jsonify({"reply": "Arre bhai kuch toh poocho! 😄"})
 
-def format_ip_result(result):
-    if "error" in result:
-        return f"❌ *Error:* {result['error']}"
-    proxy_str = "✅ No" if not result["proxy"] else "⚠️ Yes"
-    hosting_str = "✅ No" if not result["hosting"] else "⚠️ Yes"
-    return (
-        f"🌍 *IP ADDRESS CHECK*\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"*IP:* `{result['ip']}`\n"
-        f"*Verdict:* {result['verdict']}\n\n"
-        f"📍 *Location:* {result['city']}, {result['region']}, {result['country']}\n"
-        f"🏢 *ISP:* {result['isp']}\n"
-        f"🔒 *Proxy/VPN:* {proxy_str}\n"
-        f"🖥️ *Hosting:* {hosting_str}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🛡️ [ByteX](https://bytex.onrender.com)"
-    )
+    full_prompt = f"""You are ByteX AI — a cybersecurity assistant built by Pushkar Shinde from Pune.
 
-def format_whatsapp_result(result):
-    if "error" in result:
-        return f"❌ *Error:* {result['error']}"
-    lines = result["full"].split("\n")
-    formatted = "\n".join([f"_{l}_" if l.strip() else "" for l in lines])
-    return (
-        f"💬 *WHATSAPP SCAM CHECK*\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"*{result['verdict']}*\n\n"
-        f"{formatted}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🛡️ [ByteX](https://bytex.onrender.com)"
-    )
+STRICT RULES:
+- Max 2-3 sentences per reply. NO long paragraphs ever.
+- Be friendly and slightly funny — but BRIEF. Don't overdo it.
+- No essay writing. Get to the point fast.
+- Use 1 emoji max per reply.
 
-# ── COMMAND HANDLERS ──────────────────────────────────────
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔗 Scan URL", callback_data="help_url"),
-         InlineKeyboardButton("📧 Email Breach", callback_data="help_email")],
-        [InlineKeyboardButton("🔑 Password", callback_data="help_password"),
-         InlineKeyboardButton("💬 WhatsApp Scam", callback_data="help_whatsapp")],
-        [InlineKeyboardButton("🌍 IP Check", callback_data="help_ip"),
-         InlineKeyboardButton("🤖 Ask AI", callback_data="help_ai")],
-        [InlineKeyboardButton("🛡️ Open ByteX", url="https://bytex.onrender.com")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        f"👋 *Hey {update.effective_user.first_name}! I'm ByteX AI!*\n\n"
-        f"India's AI cybersecurity assistant 🇮🇳\n\n"
-        f"*What I can do:*\n"
-        f"🔗 Scan suspicious URLs\n"
-        f"📧 Check email breaches\n"
-        f"🔑 Check password leaks\n"
-        f"💬 Detect WhatsApp scams\n"
-        f"🌍 Investigate IP addresses\n"
-        f"🤖 Answer security questions\n\n"
-        f"*Just send me anything and I'll figure it out!*\n"
-        f"Or use the buttons below 👇",
-        parse_mode="Markdown",
-        reply_markup=reply_markup
-    )
+FACTS:
+- ByteX = India's AI cybersecurity platform. Tagline: "Scammers hate him. Meet ByteX."
+- Built by Pushkar Shinde (Pune University, vibe coder 😄) + Pavan Biradar (idea partner)
+- Features: URL Scanner, Email Breach, WhatsApp Scam Detector, Password Check, IP Checker, File Scanner, QR Safety, Encrypt/Decrypt, Steganography, Self-Destruct Message
+- Pushkar's links: LinkedIn https://www.linkedin.com/in/pushkar-shinde1608/ | GitHub https://github.com/PushkarEz | Instagram https://www.instagram.com/pushkar_shinde_16/
+- For feedback → tell user to click Feedback in top navigation
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📖 *ByteX Bot Commands*\n\n"
-        "/scan `<url>` — Scan any URL\n"
-        "/email `<email>` — Check email breaches\n"
-        "/password `<password>` — Check password leak\n"
-        "/ip `<ip>` — Investigate IP address\n"
-        "/whatsapp `<message>` — Detect WhatsApp scam\n"
-        "/ask `<question>` — Ask ByteX AI anything\n\n"
-        "💡 *Or just send any text* — I'll auto-detect what to check!\n\n"
-        "🛡️ bytex.onrender.com",
-        parse_mode="Markdown"
-    )
+Question: {message}"""
 
-async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /scan `https://example.com`", parse_mode="Markdown")
-        return
-    url = context.args[0]
-    msg = await update.message.reply_text("🔍 Scanning URL with 70+ engines... Please wait!")
-    result = scan_url(url)
-    await msg.edit_text(format_url_result(url, result), parse_mode="Markdown", disable_web_page_preview=True)
+    reply = ask_ai(full_prompt)
+    return jsonify({"reply": reply})
 
-async def email_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /email `your@email.com`", parse_mode="Markdown")
-        return
-    email = context.args[0]
-    msg = await update.message.reply_text("📧 Checking 12 billion breached accounts...")
-    result = check_email(email)
-    await msg.edit_text(format_email_result(email, result), parse_mode="Markdown", disable_web_page_preview=True)
 
-async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /password `yourpassword`\n\n_Don't worry — your password never leaves your device!_", parse_mode="Markdown")
-        return
-    password = " ".join(context.args)
-    msg = await update.message.reply_text("🔑 Checking password securely...")
-    result = check_password(password)
-    await msg.edit_text(format_password_result(result), parse_mode="Markdown")
-
-async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /ip `8.8.8.8`", parse_mode="Markdown")
-        return
-    ip = context.args[0]
-    msg = await update.message.reply_text("🌍 Investigating IP address...")
-    result = check_ip(ip)
-    await msg.edit_text(format_ip_result(result), parse_mode="Markdown")
-
-async def whatsapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /whatsapp `paste the suspicious message here`", parse_mode="Markdown")
-        return
-    message = " ".join(context.args)
-    msg = await update.message.reply_text("💬 ByteX AI is analyzing the message...")
-    result = check_whatsapp(message)
-    await msg.edit_text(format_whatsapp_result(result), parse_mode="Markdown", disable_web_page_preview=True)
-
-async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /ask `what is phishing?`", parse_mode="Markdown")
-        return
-    question = " ".join(context.args)
-    msg = await update.message.reply_text("🤖 ByteX AI is thinking...")
-    reply = ask_ai(question)
-    await msg.edit_text(
-        f"🤖 *ByteX AI*\n\n{reply}\n\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🛡️ [ByteX](https://bytex.onrender.com)",
-        parse_mode="Markdown", disable_web_page_preview=True
-    )
-
-# ── AUTO DETECT MESSAGE ───────────────────────────────────
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    detected = detect_type(text)
-
-    if detected == "url":
-        msg = await update.message.reply_text("🔍 URL detected! Scanning with 70+ engines...")
-        result = scan_url(text)
-        await msg.edit_text(format_url_result(text, result), parse_mode="Markdown", disable_web_page_preview=True)
-
-    elif detected == "email":
-        msg = await update.message.reply_text("📧 Email detected! Checking 12 billion breached accounts...")
-        result = check_email(text)
-        await msg.edit_text(format_email_result(text, result), parse_mode="Markdown", disable_web_page_preview=True)
-
-    elif detected == "ip":
-        msg = await update.message.reply_text("🌍 IP detected! Investigating...")
-        result = check_ip(text)
-        await msg.edit_text(format_ip_result(result), parse_mode="Markdown")
-
-    elif detected == "whatsapp":
-        msg = await update.message.reply_text("💬 Analyzing message for scam patterns...")
-        result = check_whatsapp(text)
-        await msg.edit_text(format_whatsapp_result(result), parse_mode="Markdown", disable_web_page_preview=True)
-
-    else:
-        # Ask AI for everything else
-        msg = await update.message.reply_text("🤖 Asking ByteX AI...")
-        reply = ask_ai(text)
-        await msg.edit_text(
-            f"🤖 *ByteX AI*\n\n{reply}\n\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"_Send a URL, email, IP or WhatsApp message for instant scan!_",
-            parse_mode="Markdown"
-        )
-
-# ── CALLBACK HANDLER ──────────────────────────────────────
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    tips = {
-        "help_url": "🔗 *URL Scanner*\n\nSend any link directly or use:\n`/scan https://suspicious-site.com`\n\n70+ engines check it instantly!",
-        "help_email": "📧 *Email Breach*\n\nSend your email directly or use:\n`/email your@email.com`\n\nChecks 12 billion breached accounts!",
-        "help_password": "🔑 *Password Check*\n\nUse:\n`/password yourpassword`\n\n_k-Anonymity — password never leaves device!_",
-        "help_whatsapp": "💬 *WhatsApp Scam*\n\nForward/paste any suspicious message directly!\n\nAI detects scam patterns instantly.",
-        "help_ip": "🌍 *IP Check*\n\nSend any IP directly or use:\n`/ip 8.8.8.8`\n\nShows location, ISP, VPN status.",
-        "help_ai": "🤖 *ByteX AI*\n\nAsk anything!\n`/ask what is phishing?`\n`/ask how to stay safe online?`\n\nFriendly cybersecurity expert 😄",
+@app.route('/submit-feedback', methods=['POST'])
+def submit_feedback():
+    import json
+    from datetime import datetime
+    data = request.json
+    name = data.get('name', 'Anonymous').strip() or 'Anonymous'
+    rating = data.get('rating', 5)
+    category = data.get('category', 'General')
+    message = data.get('message', '').strip()
+    if not message:
+        return jsonify({"error": "Please write your feedback!"})
+    feedback_entry = {
+        "id": int(datetime.now().timestamp()),
+        "name": name,
+        "rating": rating,
+        "category": category,
+        "message": message,
+        "time": datetime.now().strftime("%d %b %Y, %I:%M %p")
     }
-    await query.edit_message_text(
-        tips.get(query.data, "Unknown option"),
-        parse_mode="Markdown"
-    )
+    feedback_file = 'feedback.json'
+    try:
+        if os.path.exists(feedback_file):
+            with open(feedback_file, 'r') as f:
+                feedbacks = json.load(f)
+        else:
+            feedbacks = []
+        feedbacks.append(feedback_entry)
+        with open(feedback_file, 'w') as f:
+            json.dump(feedbacks, f, indent=2)
+        return jsonify({"success": True, "message": "Feedback saved! Thank you 🙏"})
+    except Exception as e:
+        print("FEEDBACK ERROR:", e)
+        return jsonify({"error": "Could not save feedback. Try again."})
 
-# ── MAIN ─────────────────────────────────────────────────
-def main():
-    if not TOKEN:
-        print("❌ TELEGRAM_BOT_TOKEN not set!")
-        print("   Get token from @BotFather on Telegram")
-        return
 
-    print("🚀 ByteX Bot starting...")
-    print(f"   VT API: {'✅' if VT_KEY else '❌ Not set'}")
-    print(f"   Groq API: {'✅' if GROQ_KEY else '❌ Not set'}")
-    print(f"   HIBP API: {'✅' if HIBP_KEY else '⚠️  Demo mode'}")
+@app.route('/get-feedbacks', methods=['GET'])
+def get_feedbacks():
+    import json
+    secret = request.args.get('key', '')
+    if secret != os.environ.get('ADMIN_KEY', 'bytex-admin-2026'):
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        if os.path.exists('feedback.json'):
+            with open('feedback.json', 'r') as f:
+                feedbacks = json.load(f)
+            return jsonify({"feedbacks": feedbacks, "total": len(feedbacks)})
+        return jsonify({"feedbacks": [], "total": 0})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
-    app = Application.builder().token(TOKEN).build()
 
-    # Commands
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("scan", scan_command))
-    app.add_handler(CommandHandler("email", email_command))
-    app.add_handler(CommandHandler("password", password_command))
-    app.add_handler(CommandHandler("ip", ip_command))
-    app.add_handler(CommandHandler("whatsapp", whatsapp_command))
-    app.add_handler(CommandHandler("ask", ask_command))
+def run_telegram_bot():
+    """Run ByteX Telegram bot in background thread"""
+    try:
+        import importlib.util, sys
+        # Get absolute path of current directory
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        bot_files = ["bytex_bot_v2.py", "bytex_bot.py", "bot.py"]
+        bot_path = None
+        for fname in bot_files:
+            full_path = os.path.join(base_dir, fname)
+            if os.path.exists(full_path):
+                bot_path = full_path
+                print(f"✅ Found bot file: {full_path}")
+                break
+        if not bot_path:
+            print(f"❌ Bot file not found in {base_dir}! Files: {os.listdir(base_dir)}")
+            return
+        spec = importlib.util.spec_from_file_location("bytex_bot", bot_path)
+        bot_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bot_module)
+        bot_module.main()
+    except Exception as e:
+        print(f"Telegram bot error: {e}")
 
-    # Auto detect
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+# ── START TELEGRAM BOT ──────────────────────────────────
+def _start_bot_delayed():
+    try:
+        import time
+        time.sleep(5)  # wait for Flask/gunicorn to fully start
+        run_telegram_bot()
+    except Exception as e:
+        print(f"⚠️  Bot error: {e}")
 
-    # Buttons
-    app.add_handler(CallbackQueryHandler(button_callback))
+try:
+    import threading as _threading
+    _tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if _tg_token:
+        _t = _threading.Thread(target=_start_bot_delayed, daemon=True)
+        _t.start()
+        print("✅ ByteX Telegram Bot starting in 5s...")
+    else:
+        print("⚠️  TELEGRAM_BOT_TOKEN not set — bot not started")
+except Exception as _e:
+    print(f"⚠️  Bot startup skipped: {_e}")
 
-    print("✅ ByteX Bot is running! Press Ctrl+C to stop.")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

@@ -281,7 +281,7 @@ textarea.stinp{resize:vertical;min-height:80px;}
   .dic svg{width:18px;height:18px;}
   .ddiv{display:none;}
   .navtab{font-size:9px;padding:4px 8px;}
-  .fbtn{bottom:78px;}
+  .fbtn{bottom:72px;}
   .chatpanel{bottom:80px;}
 }
 
@@ -302,13 +302,6 @@ textarea.stinp{resize:vertical;min-height:80px;}
   .mdi{min-width:40px;padding:3px 4px;}
   .mdi svg{width:16px;height:16px;}
 }
-
-.tgbtn{position:fixed;bottom:76px;right:18px;z-index:999;width:44px;height:44px;border-radius:50%;background:#229ED9;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(34,158,217,0.35);transition:all 0.2s;}
-.tgbtn:hover{transform:scale(1.1);box-shadow:0 6px 20px rgba(34,158,217,0.5);}
-.tgbtn svg{width:24px;height:24px;fill:white;}
-.tgtooltip{position:fixed;bottom:128px;right:14px;background:#229ED9;color:white;font-size:10px;font-weight:700;padding:5px 10px;border-radius:10px;white-space:nowrap;opacity:0;transition:opacity 0.2s;pointer-events:none;font-family:'JetBrains Mono',monospace;}
-.tgbtn:hover + .tgtooltip{opacity:1;}
-@media(max-width:640px){.tgbtn{bottom:130px;right:14px;width:40px;height:40px;} .fbtn{bottom:78px;right:14px;} .chatpanel{bottom:126px;right:10px;width:calc(100vw - 20px);}}
 </style>
 </head>
 <body>
@@ -954,14 +947,6 @@ textarea.stinp{resize:vertical;min-height:80px;}
     </div><!-- /pagescroll -->
   </div><!-- /mainwrap -->
 
-
-  <!-- TELEGRAM BOT BUTTON -->
-  <button class="tgbtn" onclick="window.open('https://t.me/ByteXSecurityBot','_blank')" title="Chat on Telegram">
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.017 9.502c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.548l-2.95-.924c-.642-.2-.654-.642.136-.953l11.531-4.448c.535-.194 1.003.131.365.025z"/>
-    </svg>
-  </button>
-  <div class="tgtooltip">Chat on Telegram 🤖</div>
   <!-- MOBILE BOTTOM NAV -->
   <div class="mobnav" id="mobnav">
     <div class="mobitem ac" id="mob-home" onclick="showPage('home');setMobActive('home')">
